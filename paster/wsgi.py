@@ -174,8 +174,13 @@ def route(url, method='GET'):
     return decorator
 
 
+def get_virtual_config():
+    _name = inspect.stack()[1][3]
+    return VirtualShell.config.get(_name, {})
+
+
 class VirtualShell(object):
-    resources = {}
+    config = {}
 
     def __init__(self):
         self.objects = {}
@@ -193,11 +198,11 @@ class VirtualShell(object):
         if selected_name:
             mod_name, func_name = apis[selected_name]
             if not mod_name:
-                return self.objects[func_name](**kwargs)
+                meth = self.objects[func_name]
             else:
                 obj = self.objects[mod_name]
                 meth = getattr(obj, func_name)
-                return meth(**kwargs)
+            return meth(**kwargs)
 
     def _update_mapping(self, name):
         _conf = _get_route(name)
@@ -214,11 +219,13 @@ class VirtualShell(object):
         mod_name = mod.func
         if inspect.isclass(mod_name):
             mod_name = '.'.join([mod_name.__module__, mod_name.__name__])
+            if mod_name not in self.objects:
+                self.objects[mod_name] = mod()
         else:
             mod_name = mod_name.__name__
-        if mod_name not in self.objects:
-            self.objects[mod_name] = mod()
+            if mod_name not in self.objects:
+                self.objects[mod_name] = mod
 
         self._update_mapping(mod_name)
         self._update_mapping(None)
-        VirtualShell.resources[mod_name] = config
+        VirtualShell.config[mod_name] = config

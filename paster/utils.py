@@ -58,4 +58,3 @@ def import_class(class_name):
     class_name = str(class_name).split('.')
     cls = __import__('.'.join(class_name[0:-1]), fromlist=[class_name[-1]])
     return getattr(cls, class_name[-1])
-
