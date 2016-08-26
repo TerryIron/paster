@@ -1,5 +1,7 @@
-#########################################################################
-# 
+#!/usr/bin/env python
+# coding=utf-8
+
+#
 # Copyright (c) 2015-2018  Terry Xi
 # All Rights Reserved.
 # 
@@ -15,11 +17,10 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-#########################################################################
-
 
 __author__ = 'terry'
 
+import os
 import cgi
 import copy
 try:
@@ -73,8 +74,10 @@ def shell_factory(loader, global_conf, **local_conf):
     shell_class = local_conf.pop('shell_class')
     shells = local_conf.pop('shell').split()
     conf = as_config(global_conf['__file__'])
+    root_path = os.path.dirname(global_conf['__file__'])
     shell_class_kw = _get_shell_kwargs(local_conf)
     sh = import_class(shell_class)(**shell_class_kw)
+    sh.load_root(root_path)
     for shell in shells:
         sh_conf = dict()
         for k, v in conf.items('shell:{0}'.format(shell)):
@@ -83,13 +86,14 @@ def shell_factory(loader, global_conf, **local_conf):
         models = models.split() if models else []
         for model in models:
             mod_conf = dict()
+            mod_conf.update(sh_conf)
             for k, v in conf.items('model:{0}'.format(model)):
                 mod_conf[k] = v
             model_kwargs = _get_model_kwargs(mod_conf)
             model = loader.get_app(model, global_conf=global_conf)
             mod = import_class(model)
             mod = partial(mod, **model_kwargs)
-            sh.load_model(mod, config=sh_conf)
+            sh.load_model(mod, config=mod_conf)
     local_conf['shell'] = sh
     app = _load_factory(app_factory, global_conf, **local_conf)
     return app

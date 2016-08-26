@@ -1,4 +1,6 @@
-#########################################################################
+#!/usr/bin/env python
+# coding=utf-8
+
 #
 # Copyright (c) 2015-2018  Terry Xi
 # All Rights Reserved.
@@ -15,7 +17,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-#########################################################################
 
 __author__ = 'terry'
 
@@ -34,7 +35,7 @@ class BadRequest(myException):
     status_code = 400
 
 
-class NoHandlerFound(myException):
+class NotFound(myException):
     """Raised when no handler to process request"""
     status_code = 404
 
@@ -103,7 +104,7 @@ class URLMiddleware(Middleware, WSGIMiddleware):
         else:
             try:
                 if not hasattr(self.handler, 'run'):
-                    raise NoHandlerFound('Resource Handler not found')
+                    raise NotFound('Resource Handler not found')
                 target_name = context.get('PATH_INFO', None)
                 method_name = context.get('REQUEST_METHOD', 'GET')
                 if target_name and method_name:
@@ -145,18 +146,29 @@ def _get_route(key):
 
 
 def route(url, method='GET'):
+    url = str(url)
+
     if isinstance(method, list):
         _packs = method
     else:
         _packs = [method]
+
+    if not url.startswith('^'):
+        url = '^' + url
+
+    if not url.endswith('$'):
+        url += '$'
+
     url_re = re.compile(url)
 
     def decorator(func):
         cls_name = inspect.stack()[1][3]
         if not cls_name == '<module>':
             mod_name = '.'.join([func.__module__, cls_name])
+            func_name = func.__name__
         else:
             mod_name = None
+            func_name = '.'.join([func.__module__, func.__name__])
         _update_route(mod_name, {})
 
         mod_dict = _get_route(mod_name)
@@ -164,7 +176,7 @@ def route(url, method='GET'):
             if _pack not in mod_dict:
                 mod_dict[_pack] = {}
 
-            mod_dict[_pack][url_re] = (mod_name, func.__name__)
+            mod_dict[_pack][url_re] = (mod_name, func_name)
 
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -174,22 +186,42 @@ def route(url, method='GET'):
     return decorator
 
 
-def get_virtual_config():
+def _get_virtual_config(func, class_object=None):
+    # Support decorator
+    if class_object:
+        _name = str(class_object.__class__).split()[1].strip('>').strip("'")
+    else:
+        _name = '.'.join([func.__module__, func.__name__])
+
+    return VirtualShell.config.get(_name, {})
+
+
+def get_virtual_config(class_object=None):
     _name = inspect.stack()[1][3]
+    if class_object:
+        _name = str(class_object.__class__).split()[1].strip('>').strip("'")
+    else:
+        _pack = inspect.stack()[1][1]
+        _pack = str(_pack).split(VirtualShell.root_path)
+        if len(_pack) > 1:
+            _pack = _pack[1].strip('/').strip('.py').strip('\\').replace('/', '.').replace('\\', '.')
+        _name = '.'.join([_pack, _name])
+
     return VirtualShell.config.get(_name, {})
 
 
 class VirtualShell(object):
     config = {}
+    root_path = None
 
     def __init__(self):
         self.objects = {}
-        self.mapping = {}
+        self.mapping_api = {}
 
     def run(self, name, method, **kwargs):
-        if method not in self.mapping:
-            raise NoHandlerFound('No such method')
-        apis = self.mapping[method]
+        if method not in self.mapping_api:
+            raise NotFound()
+        apis = self.mapping_api[method]
         selected_name = None
         for k in apis.keys():
             if k.match(name):
@@ -203,29 +235,35 @@ class VirtualShell(object):
                 obj = self.objects[mod_name]
                 meth = getattr(obj, func_name)
             return meth(**kwargs)
+        else:
+            raise NotFound()
 
     def _update_mapping(self, name):
         _conf = _get_route(name)
-        if isinstance(_conf, dict):
+        if _conf:
             for _method, _dict in _conf.items():
-                if _method not in self.mapping:
-                    self.mapping[_method] = _dict
-                _map_dict = self.mapping[_method]
+                if _method not in self.mapping_api:
+                    self.mapping_api[_method] = _dict
+                _map_dict = self.mapping_api[_method]
                 for _match, _api_args in _dict.items():
-                    if _match not in _map_dict:
-                        _map_dict[_match] = _api_args
+                    _map_dict[_match] = _api_args
 
     def load_model(self, mod, config=None):
         mod_name = mod.func
-        if inspect.isclass(mod_name):
-            mod_name = '.'.join([mod_name.__module__, mod_name.__name__])
-            if mod_name not in self.objects:
+        mod_name = '.'.join([mod_name.__module__, mod_name.__name__])
+        VirtualShell.config[mod_name] = config
+
+        if mod_name not in self.objects:
+            if inspect.isclass(mod.func):
                 self.objects[mod_name] = mod()
-        else:
-            mod_name = mod_name.__name__
-            if mod_name not in self.objects:
+            else:
                 self.objects[mod_name] = mod
 
+        # Update object-function mapping
         self._update_mapping(mod_name)
+        # Update function mapping
         self._update_mapping(None)
-        VirtualShell.config[mod_name] = config
+
+    @staticmethod
+    def load_root(root_path):
+        VirtualShell.root_path = root_path

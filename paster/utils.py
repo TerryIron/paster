@@ -1,4 +1,6 @@
-#########################################################################
+#!/usr/bin/env python
+# coding=utf-8
+
 #
 # Copyright (c) 2015-2018  Terry Xi
 # All Rights Reserved.
@@ -15,8 +17,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-#########################################################################
-
 
 __author__ = 'terry'
 
