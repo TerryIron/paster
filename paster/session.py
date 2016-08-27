@@ -36,7 +36,7 @@ CONNECTIONS = {}
 NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 
 
-def redis_session(option_name, name=None, name_option=None, key=None, key_option=None, timeout=86400, is_force=False):
+def redis_session(option_name, key=None, key_option=None, timeout=86400, use_cache=False):
     import redis
 
     _connection_name = 'redis_session'
@@ -52,8 +52,7 @@ def redis_session(option_name, name=None, name_option=None, key=None, key_option
                                str(x).split('opt_key:')[1] in y else None,
                                _gen_own_key())
 
-    redis_target = dict(key=get_key('key', key) if not key_option else get_key('opt_key', key_option),
-                        name=get_key('key', name) if not name_option else get_key('opt_key', name_option))
+    redis_target = dict(key=get_key('key', key) if not key_option else get_key('opt_key', key_option))
 
     if _connection_name in CONNECTIONS and CONNECTIONS[_connection_name]:
         redis_target['session'] = CONNECTIONS[_connection_name]
@@ -65,24 +64,17 @@ def redis_session(option_name, name=None, name_option=None, key=None, key_option
             _obj = None
             if args and hasattr(args[0], func.__name__):
                 _obj = args[0]
-            if 'real_name' not in redis_target:
-                if not redis_target['name']:
-                    _name = _connection_name
-                else:
-                    config = _get_virtual_config(func, _obj)
-                    _name = redis_target['name'](config)
-            else:
-                _name = redis_target['real_name']
             if 'real_key' not in redis_target:
                 if not redis_target['key']:
                     _key = uuid.uuid5(NAMESPACE_DNS, func.__module__ + func.__name__)
                 else:
                     config = _get_virtual_config(func, _obj)
                     _key = redis_target['key'](config)
-                    _key = uuid.uuid5(NAMESPACE_DNS, _key)
+                    _key = uuid.uuid3(NAMESPACE_DNS, _key)
                 redis_target['real_key'] = _key
             else:
                 _key = redis_target['real_key']
+            _name = uuid.uuid5(NAMESPACE_DNS, _key)
             if 'session' not in redis_target:
                 config = _get_virtual_config(func, _obj)
                 url = urlparse.urlparse(config[option_name])
@@ -95,38 +87,35 @@ def redis_session(option_name, name=None, name_option=None, key=None, key_option
             class LocalSession(object):
 
                 @staticmethod
-                def get(key):
+                def get(item=None):
+                    if not item:
+                        item = _key
                     try:
-                        return redis_target['session'].hget(_name, key)
+                        return redis_target['session'].hget(_name, item)
                     except Exception as e:
                         print SessionOperationError(e)
 
                 @staticmethod
-                def set(key, value):
+                def set(item=None, value=None):
+                    if not item:
+                        item = _key
                     if value:
                         try:
-                            redis_target['session'].hset(_name, key, value)
+                            redis_target['session'].hset(_name, item, value)
                             redis_target['session'].expire(_name, timeout)
-                        except:
-                            pass
+                        except Exception as e:
+                            print SessionOperationError(e)
 
             if not _obj:
                 session = LocalSession()
-                ret = session.get(_key)
-                if not ret:
-                    ret = func(*args, **kwargs)
-                    session.set(_key, ret)
             else:
                 setattr(_obj, '__session__', LocalSession())
-                if not is_force:
-                    ret = func(*args, **kwargs)
-                    _obj.__session__.set(_key, ret)
-                else:
-                    ret = _obj.__session__.get(_key)
-                    if not ret:
-                        ret = func(*args, **kwargs)
-                        _obj.__session__.set(_key, ret)
-
+                session = getattr(_obj, '__session__')
+            if use_cache:
+                ret = session.get(_key)
+            else:
+                ret = func(*args, **kwargs)
+                session.set(_key, ret)
             return ret
         return _wrap_func
     return _wrap

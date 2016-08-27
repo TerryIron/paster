@@ -1,0 +1,4 @@
+PasteDeploy==1.5.2
+PasteScript==2.0.2
+zope.mimetype==2.0.0
+redis >= 2.1.3

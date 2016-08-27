@@ -22,7 +22,7 @@ __author__ = 'terry'
 
 import re
 import inspect
-from ConfigParser import ConfigParser
+import ConfigParser
 
 
 class myException(Exception):
@@ -58,9 +58,9 @@ class myException(Exception):
 
 
 def as_config(config_file):
-    if isinstance(config_file, ConfigParser):
+    if isinstance(config_file, ConfigParser.ConfigParser):
         return config_file
-    config = ConfigParser()
+    config = ConfigParser.ConfigParser()
     config.read(config_file)
     return config
 
