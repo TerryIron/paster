@@ -32,12 +32,16 @@ from utils import myException, as_config
 
 class BadRequest(myException):
     """Raised when request comming with invalid data """
+
     status_code = 400
+    error_code = 100
 
 
 class NotFound(myException):
     """Raised when no handler to process request"""
+
     status_code = 404
+    error_code = 104
 
 
 class WSGIMiddleware(object):
@@ -125,8 +129,6 @@ class URLMiddleware(Middleware, WSGIMiddleware):
                     return cb()
                 else:
                     raise BadRequest()
-            except (TypeError, KeyError):
-                raise BadRequest()
             except Exception as e:
                 print traceback.print_exc()
                 raise e

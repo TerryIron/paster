@@ -27,10 +27,11 @@ import ConfigParser
 
 class myException(Exception):
     status_code = 500
+    error_code = 0
 
-    def __init__(self, string='', errcode=0):
+    def __init__(self, string=''):
         self.string = str(string)
-        self.errcode = int(errcode)
+        self.errcode = int(myException.error_code)
 
     def __str__(self):
         # If errcode not exist, it means error can not reply to client

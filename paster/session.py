@@ -31,6 +31,9 @@ from utils import myException
 class SessionOperationError(myException):
     """ Session 操作失败"""
 
+    error_code = 201
+
+
 CONNECTIONS = {}
 
 NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
@@ -65,16 +68,14 @@ def redis_session(option_name, key=None, key_option=None, timeout=86400, use_cac
             if args and hasattr(args[0], func.__name__):
                 _obj = args[0]
             if 'real_key' not in redis_target:
-                if not redis_target['key']:
-                    _key = uuid.uuid5(NAMESPACE_DNS, func.__module__ + func.__name__)
-                else:
-                    config = _get_virtual_config(func, _obj)
-                    _key = redis_target['key'](config)
-                    _key = uuid.uuid3(NAMESPACE_DNS, _key)
+                config = _get_virtual_config(func, _obj)
+                _key = redis_target['key'](config)
+                if not _key:
+                    _key = str(uuid.uuid3(NAMESPACE_DNS, func.__module__ + func.__name__))
                 redis_target['real_key'] = _key
             else:
                 _key = redis_target['real_key']
-            _name = uuid.uuid5(NAMESPACE_DNS, _key)
+            _name = str(uuid.uuid5(NAMESPACE_DNS, _key))
             if 'session' not in redis_target:
                 config = _get_virtual_config(func, _obj)
                 url = urlparse.urlparse(config[option_name])
