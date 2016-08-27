@@ -180,8 +180,7 @@ def route(url, method='GET'):
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            obj = func(*args, **kwargs)
-            return obj
+            return func(*args, **kwargs)
         return wrapper
     return decorator
 

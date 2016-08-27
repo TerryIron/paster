@@ -31,10 +31,9 @@ from utils import myException
 class SessionOperationError(myException):
     """ Session 操作失败"""
 
+CONNECTIONS = {}
 
 NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
-
-CONNECTIONS = {}
 
 
 def redis_session(option_name, name=None, name_option=None, key=None, key_option=None, timeout=86400, is_force=False):
@@ -93,26 +92,41 @@ def redis_session(option_name, name=None, name_option=None, key=None, key_option
                 CONNECTIONS[_connection_name] = connection
                 redis_target['session'] = connection
 
-            def save_session(_val):
-                if _val:
-                    try:
-                        redis_target['session'].hset(_name, _key, val)
-                        redis_target['session'].expire(_name, timeout)
-                    except:
-                        pass
-            if is_force:
-                val = func(*args, **kwargs)
-                save_session(val)
-            else:
-                val = None
-                try:
-                    val = redis_target['session'].hget(_name, _key)
-                except Exception as e:
-                    print SessionOperationError(e)
+            class LocalSession(object):
 
-                if not val:
-                    val = func(*args, **kwargs)
-                    save_session(val)
-            return val
+                @staticmethod
+                def get(key):
+                    try:
+                        return redis_target['session'].hget(_name, key)
+                    except Exception as e:
+                        print SessionOperationError(e)
+
+                @staticmethod
+                def set(key, value):
+                    if value:
+                        try:
+                            redis_target['session'].hset(_name, key, value)
+                            redis_target['session'].expire(_name, timeout)
+                        except:
+                            pass
+
+            if not _obj:
+                session = LocalSession()
+                ret = session.get(_key)
+                if not ret:
+                    ret = func(*args, **kwargs)
+                    session.set(_key, ret)
+            else:
+                setattr(_obj, '__session__', LocalSession())
+                if not is_force:
+                    ret = func(*args, **kwargs)
+                    _obj.__session__.set(_key, ret)
+                else:
+                    ret = _obj.__session__.get(_key)
+                    if not ret:
+                        ret = func(*args, **kwargs)
+                        _obj.__session__.set(_key, ret)
+
+            return ret
         return _wrap_func
     return _wrap
