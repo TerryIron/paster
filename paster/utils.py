@@ -21,29 +21,40 @@
 __author__ = 'terry'
 
 import re
+import inspect
 from ConfigParser import ConfigParser
 
 
 class myException(Exception):
     status_code = 500
 
-    def __init__(self, string='', errcode=''):
-        self.string = string
-        self.errcode = errcode
+    def __init__(self, string='', errcode=0):
+        self.string = str(string)
+        self.errcode = int(errcode)
 
     def __str__(self):
-        if not self.string:
-            _str = '{0}.([a-zA-Z0-9_].*)'.format(self.__module__)
-            _class = '{0}'.format(self.__class__)
-            _class = _class.strip('>').strip('<')
-            ret = re.compile(_str).findall(_class)
-            if ret:
-                _cls = ret[0]
-                return _cls.strip('"').strip("'")
+        # If errcode not exist, it means error can not reply to client
+        if self.errcode:
+            if not self.string:
+                _str = '{0}.([a-zA-Z0-9_].*)'.format(self.__module__)
+                _class = '{0}'.format(self.__class__)
+                _class = _class.strip('>').strip('<')
+                ret = re.compile(_str).findall(_class)
+                if ret:
+                    _cls = ret[0]
+                    return _cls.strip('"').strip("'")
+                else:
+                    return self.__class__
             else:
-                return self.__class__
+                return self.string
         else:
-            return self.string
+            _file_err_info = '\n'
+            for err_info in inspect.stack()[1:10]:
+                _file, _line, _callback = err_info[1:4]
+                _file_err_info = '\n' + '{0}:{1} -> {2}'.format(_file, _line, _callback) + _file_err_info
+            return '\n{0}{1}{2} {3}'.format('Traceback:',
+                                            _file_err_info,
+                                            self.__class__, self.string)
 
 
 def as_config(config_file):

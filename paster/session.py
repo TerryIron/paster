@@ -25,6 +25,11 @@ import urlparse
 from functools import wraps, partial
 
 from wsgi import _get_virtual_config
+from utils import myException
+
+
+class SessionOperationError(myException):
+    """ Session 操作失败"""
 
 
 NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
@@ -81,27 +86,30 @@ def redis_session(option_name, name=None, name_option=None, key=None, key_option
                 _key = redis_target['real_key']
             if 'session' not in redis_target:
                 config = _get_virtual_config(func, _obj)
-                try:
-                    url = urlparse.urlparse(config[option_name])
-                    host, port = url.netloc.split(':')
-                    pool = redis.ConnectionPool(host=host, port=port)
-                    connection = redis.StrictRedis(connection_pool=pool)
-                    if connection:
-                        CONNECTIONS[_connection_name] = connection
-                        redis_target['session'] = connection
-                except Exception as e:
-                    print e
-                    pass
+                url = urlparse.urlparse(config[option_name])
+                host, port = url.netloc.split(':')
+                pool = redis.ConnectionPool(host=host, port=port)
+                connection = redis.StrictRedis(connection_pool=pool)
+                CONNECTIONS[_connection_name] = connection
+                redis_target['session'] = connection
 
             def save_session(_val):
                 if _val:
-                    redis_target['session'].hset(_name, _key, val)
-                    redis_target['session'].expire(_name, timeout)
+                    try:
+                        redis_target['session'].hset(_name, _key, val)
+                        redis_target['session'].expire(_name, timeout)
+                    except:
+                        pass
             if is_force:
                 val = func(*args, **kwargs)
                 save_session(val)
             else:
-                val = redis_target['session'].hget(_name, _key)
+                val = None
+                try:
+                    val = redis_target['session'].hget(_name, _key)
+                except Exception as e:
+                    print SessionOperationError(e)
+
                 if not val:
                     val = func(*args, **kwargs)
                     save_session(val)
