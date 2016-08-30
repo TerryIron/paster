@@ -48,10 +48,7 @@ class myException(Exception):
             else:
                 return self.string
         else:
-            import traceback
-            err = traceback.format_exc()
-            # return '{0}: {1}'.format(self.__class__, self.string)
-            return err
+            return '{0}: {1}'.format(self.__class__, self.string)
 
 
 def as_config(config_file):

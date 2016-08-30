@@ -161,7 +161,8 @@ class URLMiddleware(Middleware, WSGIMiddleware):
                     raise BadRequest()
             except Exception as e:
                 import traceback
-                traceback.print_exc()
+                err = traceback.format_exc()
+                logger.debug(err)
                 raise e
         return super(URLMiddleware, self).process_request(context, start_response)
 

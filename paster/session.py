@@ -52,20 +52,15 @@ class SessionMiddleware(Middleware, WSGIMiddleware):
             session_id = str(uuid.uuid4())
         push_environ_args(context, self.SESSION_LOCAL_NAME, session_id)
 
-        return super(SessionMiddleware, self).process_request(context, start_response)
-
-    def resposne_normal(self, context, start_response):
         def _start_response(status, response_headers, exc_info=None):
-            if self.SESSION_LOCAL_NAME in context:
-                cookie = SimpleCookie()
-                session_id = pop_environ_args(context, self.SESSION_LOCAL_NAME)
-                cookie[self.SESSION_KEY] = str(session_id)
-                cookie[self.SESSION_KEY]['path'] = '/'
-                cookie_string = cookie[self.SESSION_KEY].OutputString()
-                response_headers.append(('Set-Cookie', cookie_string))
+            cookie = SimpleCookie()
+            cookie[self.SESSION_KEY] = session_id
+            cookie[self.SESSION_KEY]['path'] = '/'
+            cookie_string = cookie[self.SESSION_KEY].OutputString()
+            response_headers.append(('Set-Cookie', cookie_string))
             return start_response(status, response_headers, exc_info)
 
-        return super(SessionMiddleware, self).resposne_normal(context, _start_response)
+        return super(SessionMiddleware, self).process_request(context, _start_response)
 
 
 CONNECTIONS = {}
