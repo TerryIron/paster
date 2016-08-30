@@ -186,27 +186,31 @@ class URLMap(_URLMap):
                 environ['REQUEST_KWARGS'] = dict()
                 for k, v in urlparse.parse_qs(environ['QUERY_STRING']).items():
                     environ['REQUEST_KWARGS'][k] = v[0]
-            val = app(environ, start_response)
+            val, _start_response = app(environ, start_response)
             mime_type = typegetter.mimeTypeGuesser(name=path_info)
             if not mime_type:
                 mime_type = SUPPORTED_CONTENT_TYPES[0]
+
+            val.content = val.content if val.content else []
+
+            def _get_status_code(_val):
+                status_code = str(_val.status_code)
+                if status_code == '200':
+                    return status_code + ' OK'
+                else:
+                    return status_code + ' Oops'
+
             if isinstance(val, HttpResponse):
                 _header = set([(k.upper(), v) for k, v in val.headers.items()])
                 _header.add(('CONTENT-TYPE', mime_type))
-                status_code = str(val.status_code)
-                if status_code == '200':
-                    start_response(status_code + ' OK', list(_header))
-                else:
-                    start_response(status_code + ' Oops', list(_header))
+                _start_response(_get_status_code(val), list(_header), )
+
                 return val.content
             else:
-                if hasattr(val, 'status_code'):
-                    status_code = str(val.status_code) + ' Oops'
-                else:
-                    status_code = '200 OK'
-                start_response(status_code, [('CONTENT-TYPE', mime_type), ], )
-                val = val if val else []
-                return json.dumps(val, ensure_ascii=False)
+                _header = (('CONTENT-TYPE', mime_type), )
+                _start_response(_get_status_code(val), list(_header), )
+
+                return json.dumps(val.content, ensure_ascii=False)
 
         environ['paste.urlmap_object'] = self
         return self.not_found_application(environ, start_response)

@@ -26,16 +26,15 @@ import ConfigParser
 
 
 class myException(Exception):
-    status_code = 500
-    error_code = 0
+    status_code = 500  # 返回client的状态码
+    error_code = 0  # 错误号
 
     def __init__(self, string=''):
         self.string = str(string)
-        self.errcode = int(myException.error_code)
 
     def __str__(self):
-        # If errcode not exist, it means error can not reply to client
-        if self.errcode:
+        #  存在错误号, 表示表示对外公开
+        if self.error_code:
             if not self.string:
                 _str = '{0}.([a-zA-Z0-9_].*)'.format(self.__module__)
                 _class = '{0}'.format(self.__class__)
@@ -49,13 +48,10 @@ class myException(Exception):
             else:
                 return self.string
         else:
-            _file_err_info = '\n'
-            for err_info in inspect.stack()[1:10]:
-                _file, _line, _callback = err_info[1:4]
-                _file_err_info = '\n' + '{0}:{1} -> {2}'.format(_file, _line, _callback) + _file_err_info
-            return '\n{0}{1}{2} {3}'.format('Traceback:',
-                                            _file_err_info,
-                                            self.__class__, self.string)
+            import traceback
+            err = traceback.format_exc()
+            # return '{0}: {1}'.format(self.__class__, self.string)
+            return err
 
 
 def as_config(config_file):

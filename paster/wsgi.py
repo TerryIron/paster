@@ -21,13 +21,16 @@
 __author__ = 'terry'
 
 import re
-import traceback
 import json
 import inspect
 from functools import partial, wraps
 
-
 from utils import myException, as_config
+from log import get_logger
+
+logger = get_logger(__name__)
+
+SESSION_LOCAL_NAME = '__session_id__'
 
 
 class BadRequest(myException):
@@ -64,12 +67,22 @@ class WSGIMiddleware(object):
 
     @classmethod
     def _factory(cls, context, start_response=None):
-        for c, g, l, sh in cls.middleware[::-1]:
-            c = c(sh, g, **l)
-            context = c.__call__(context, start_response)
+        _start_response = start_response
+        _context = type('Response', (), {'content': None, 'status_code': 200})
+        for c, _conf, _local_conf, sh in cls.middleware[::-1]:
+            c = c(sh, _conf, **_local_conf)
+            context, _start_response = c.__call__(context, _start_response)
         if isinstance(context, Exception):
-            return dict(err_msg=str(context))
-        return context
+            # Readable errors
+            status_code = getattr(context, 'status_code', 200)
+            error_code = getattr(context, 'error_code', None)
+            if error_code:
+                context = dict(err_msg=str(context), err_code=error_code)
+            else:
+                context = dict(err_msg='')
+            _context.status_code = status_code
+        _context.content = context
+        return _context, _start_response
 
 
 class Middleware(object):
@@ -83,35 +96,51 @@ class Middleware(object):
             if not isinstance(context, myException):
                 context = myException(str(context))
                 setattr(context, 'status_code', 500)
-            return self.resposne_error(context)
+            return self.resposne_error(context, start_response)
 
         try:
-            result = self.process_request(context, start_response)
-            return self.resposne_normal(result)
+            _context, _start_response = self.process_request(context, start_response)
+            return self.resposne_normal(_context, _start_response)
         except Exception as e:
-            return self.resposne_error(e)
+            import traceback
+            err = traceback.format_exc()
+            logger.debug(err)
+            return self.resposne_error(e, start_response)
 
     def process_request(self, context, start_response):
-        return context
+        return context, start_response
 
-    def resposne_normal(self, context):
-        return context
+    def resposne_normal(self, context, start_response):
+        return context, start_response
 
-    def resposne_error(self, err):
-        return err
+    def resposne_error(self, err, start_response):
+        return err, start_response
+
+
+def push_environ_args(environ, item, val):
+    if 'paster.args' not in environ:
+        environ['paster.args'] = {}
+    if item not in environ['paster.args']:
+        environ['paster.args'][item] = val
+
+
+def pop_environ_args(environ, item):
+    if 'paster.args' not in environ:
+        return ''
+    return environ['paster.args'].pop(item, None)
 
 
 class URLMiddleware(Middleware, WSGIMiddleware):
     def process_request(self, context, start_response):
-        if not self.handler:
-            return super(URLMiddleware, self).process_request(context, start_response)
-        else:
+        if self.handler:
             try:
                 if not hasattr(self.handler, 'run'):
                     raise NotFound('Resource Handler not found')
                 target_name = context.get('PATH_INFO', None)
                 method_name = context.get('REQUEST_METHOD', 'GET')
                 if target_name and method_name:
+                    func_env = context.get('paster.args', {})
+
                     kwargs = context.get('REQUEST_KWARGS', {})
                     try:
                         request_body_size = int(context.get('CONTENT_LENGTH', 0))
@@ -125,13 +154,16 @@ class URLMiddleware(Middleware, WSGIMiddleware):
                     cb = partial(self.handler.run,
                                  target_name,
                                  method_name,
+                                 func_env,
                                  **kwargs)
-                    return cb()
+                    context = cb()
                 else:
                     raise BadRequest()
             except Exception as e:
-                print traceback.print_exc()
+                import traceback
+                traceback.print_exc()
                 raise e
+        return super(URLMiddleware, self).process_request(context, start_response)
 
 
 DEFAULT_ROUTES = {}
@@ -211,6 +243,18 @@ def get_virtual_config(class_object=None):
     return VirtualShell.config.get(_name, {})
 
 
+def pop_func_environ(d, item):
+    val = None
+    if len(d) > 1:
+        env = d[-1]
+        val = env.pop(item, None)
+        if len(env) == 0:
+            d = list(d)
+            d.pop(-1)
+            d = tuple(d)
+    return val, d
+
+
 class VirtualShell(object):
     config = {}
     root_path = None
@@ -219,7 +263,7 @@ class VirtualShell(object):
         self.objects = {}
         self.mapping_api = {}
 
-    def run(self, name, method, **kwargs):
+    def run(self, name, method, env, **kwargs):
         if method not in self.mapping_api:
             raise NotFound()
         apis = self.mapping_api[method]
@@ -235,7 +279,20 @@ class VirtualShell(object):
             else:
                 obj = self.objects[mod_name]
                 meth = getattr(obj, func_name)
-            return meth(**kwargs)
+
+            environ = {}
+            environ.update(env)
+
+            try:
+                return meth(environ, **kwargs)
+            except TypeError as e:
+                if func_name and 'arguments' and 'given' in str(e):
+                    return meth(**kwargs)
+                else:
+                    raise e
+            except Exception as e:
+                raise e
+
         else:
             raise NotFound()
 

@@ -36,6 +36,7 @@ from functools import partial
 
 import rpcexceptions
 from utils import as_config, import_class
+from log import handler_init
 
 
 def _load_factory(factory_line, global_conf, **local_conf):
@@ -73,11 +74,11 @@ def shell_factory(loader, global_conf, **local_conf):
     app_factory = local_conf.pop('paste.app_factory')
     shell_class = local_conf.pop('shell_class')
     shells = local_conf.pop('shell').split()
-    conf = as_config(global_conf['__file__'])
     root_path = os.path.dirname(global_conf['__file__'])
     shell_class_kw = _get_shell_kwargs(local_conf)
     sh = import_class(shell_class)(**shell_class_kw)
     sh.load_root(root_path)
+    conf = as_config(global_conf['__file__'])
     for shell in shells:
         sh_conf = dict()
         for k, v in conf.items('shell:{0}'.format(shell)):
@@ -101,15 +102,23 @@ def shell_factory(loader, global_conf, **local_conf):
 
 def platform_factory(loader, global_conf, **local_conf):
     assert 'platform' in local_conf, 'please install platform config as platform=x'
+    _log_format = global_conf.get('log_format', None)
+    _log_level = global_conf.get('log_level', None)
+    _log_path = global_conf.get('log_path', None)
+    handler_init(_log_path, _log_level, _log_format)
     platform = {}
+    platform_address = local_conf.get('platform_address', '127.0.0.1')
     for i, pf in enumerate(local_conf['platform'].split()):
         app = loader.get_app(pf, global_conf=global_conf)
         try:
             _key = local_conf['platform_listen'].split()[i]
-            _key = _key.split(':')[0:2]
-            _key = (_key[0], int(_key[1]))
+            _key = _key.split(':')
+            if len(_key) > 1:
+                _key = (_key[0], int(_key[1]))
+            else:
+                _key = (platform_address, int(_key[0]))
         except:
-            _key = ('127.0.0.1', 8000)
+            _key = (platform_address, 8000)
         platform[_key] = app
     return platform
 
@@ -127,6 +136,7 @@ def rpcmap_factory(loader, global_conf, **local_conf):
         not_found_app = global_conf.get('not_found_app')
     if not_found_app:
         not_found_app = loader.get_app(not_found_app, global_conf=global_conf)
+
     rpcmap = RPCMap(not_found_app=not_found_app)
     for rpc_line, app_name in local_conf.items():
         rpc_line = parse_rpcline_expression(rpc_line)

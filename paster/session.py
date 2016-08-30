@@ -22,16 +22,50 @@ __author__ = 'terry'
 
 import uuid
 import urlparse
+from Cookie import SimpleCookie
 from functools import wraps, partial
 
-from wsgi import _get_virtual_config
+from wsgi import _get_virtual_config, Middleware, WSGIMiddleware, SESSION_LOCAL_NAME, \
+    pop_func_environ, pop_environ_args, push_environ_args
 from utils import myException
+from log import get_logger
+
+logger = get_logger(__name__)
 
 
 class SessionOperationError(myException):
     """ Session 操作失败"""
 
-    error_code = 201
+
+class SessionMiddleware(Middleware, WSGIMiddleware):
+    SESSION_KEY = 'session_id'
+    SESSION_LOCAL_NAME = SESSION_LOCAL_NAME
+
+    def process_request(self, context, start_response):
+        _cookie = SimpleCookie()
+        if 'HTTP_COOKIE' in context:
+            _cookie.load(context['HTTP_COOKIE'])
+        session_id = None
+        if self.SESSION_KEY in _cookie:
+            session_id = _cookie[self.SESSION_KEY].value
+        if not session_id:
+            session_id = str(uuid.uuid4())
+        push_environ_args(context, self.SESSION_LOCAL_NAME, session_id)
+
+        return super(SessionMiddleware, self).process_request(context, start_response)
+
+    def resposne_normal(self, context, start_response):
+        def _start_response(status, response_headers, exc_info=None):
+            if self.SESSION_LOCAL_NAME in context:
+                cookie = SimpleCookie()
+                session_id = pop_environ_args(context, self.SESSION_LOCAL_NAME)
+                cookie[self.SESSION_KEY] = str(session_id)
+                cookie[self.SESSION_KEY]['path'] = '/'
+                cookie_string = cookie[self.SESSION_KEY].OutputString()
+                response_headers.append(('Set-Cookie', cookie_string))
+            return start_response(status, response_headers, exc_info)
+
+        return super(SessionMiddleware, self).resposne_normal(context, _start_response)
 
 
 CONNECTIONS = {}
@@ -39,7 +73,7 @@ CONNECTIONS = {}
 NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 
 
-def redis_session(option_name, key=None, key_option=None, timeout=86400, use_cache=False):
+def redis_session(option_name, key=None, key_option=None, name=None, timeout=86400, use_cache=False):
     import redis
 
     _connection_name = 'redis_session'
@@ -55,13 +89,13 @@ def redis_session(option_name, key=None, key_option=None, timeout=86400, use_cac
                                str(x).split('opt_key:')[1] in y else None,
                                _gen_own_key())
 
-    redis_target = dict(key=get_key('key', key) if not key_option else get_key('opt_key', key_option))
+    redis_target = dict(key=get_key('key', key if not callable(key) else key())
+                        if not key_option else get_key('opt_key', key_option))
 
     if _connection_name in CONNECTIONS and CONNECTIONS[_connection_name]:
         redis_target['session'] = CONNECTIONS[_connection_name]
 
     def _wrap(func):
-
         @wraps(func)
         def _wrap_func(*args, **kwargs):
             _obj = None
@@ -70,12 +104,16 @@ def redis_session(option_name, key=None, key_option=None, timeout=86400, use_cac
             if 'real_key' not in redis_target:
                 config = _get_virtual_config(func, _obj)
                 _key = redis_target['key'](config)
-                if not _key:
-                    _key = str(uuid.uuid3(NAMESPACE_DNS, func.__module__ + func.__name__))
-                redis_target['real_key'] = _key
+                if _key:
+                    redis_target['real_key'] = _key
             else:
                 _key = redis_target['real_key']
-            _name = str(uuid.uuid5(NAMESPACE_DNS, _key))
+            if not name:
+                _name, args = pop_func_environ(args, SessionMiddleware.SESSION_LOCAL_NAME)
+                if not _name:
+                    _name = str(uuid.uuid5(NAMESPACE_DNS, str(_key)))
+            else:
+                _name = name
             if 'session' not in redis_target:
                 config = _get_virtual_config(func, _obj)
                 url = urlparse.urlparse(config[option_name])
@@ -94,7 +132,8 @@ def redis_session(option_name, key=None, key_option=None, timeout=86400, use_cac
                     try:
                         return redis_target['session'].hget(_name, item)
                     except Exception as e:
-                        print SessionOperationError(e)
+                        logger.debug(SessionOperationError(e))
+                        pass
 
                 @staticmethod
                 def set(item=None, value=None):
@@ -105,18 +144,23 @@ def redis_session(option_name, key=None, key_option=None, timeout=86400, use_cac
                             redis_target['session'].hset(_name, item, value)
                             redis_target['session'].expire(_name, timeout)
                         except Exception as e:
-                            print SessionOperationError(e)
+                            logger.debug(SessionOperationError(e))
+                            pass
 
             if not _obj:
                 session = LocalSession()
             else:
                 setattr(_obj, '__session__', LocalSession())
                 session = getattr(_obj, '__session__')
-            if use_cache:
+            ret = None
+
+            if use_cache and _key:
                 ret = session.get(_key)
-            else:
+            if not ret:
                 ret = func(*args, **kwargs)
-                session.set(_key, ret)
+                if _key:
+                    session.set(_key, ret)
             return ret
         return _wrap_func
     return _wrap
+
