@@ -114,7 +114,7 @@ def redis_session(option_name, key=None, key_option=None, name=None, timeout=864
                 url = urlparse.urlparse(config[option_name])
                 host, port = url.netloc.split(':')
                 pool = redis.ConnectionPool(host=host, port=port)
-                connection = redis.StrictRedis(connection_pool=pool)
+                connection = redis.StrictRedis(connection_pool=pool, db=0)
                 CONNECTIONS[_connection_name] = connection
                 redis_target['session'] = connection
 
