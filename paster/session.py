@@ -20,6 +20,10 @@
 
 __author__ = 'terry'
 
+try:
+    import cPickle as pickle
+except:
+    import pickle
 import uuid
 import urlparse
 from Cookie import SimpleCookie
@@ -68,7 +72,8 @@ CONNECTIONS = {}
 NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 
 
-def redis_session(option_name, key=None, key_option=None, name=None, timeout=86400, use_cache=False):
+def redis_session(option_name, key=None, key_option=None, name=None,
+                  timeout=86400, use_cache=False, write_cache=False):
     import redis
 
     _connection_name = 'redis_session'
@@ -125,24 +130,28 @@ def redis_session(option_name, key=None, key_option=None, name=None, timeout=864
                     if not item:
                         item = _key
                     try:
-                        return redis_target['session'].hget(_name, item)
+                        value = redis_target['session'].hget(_name, item)
+                        _value = pickle.loads(value)
+                        return _value
                     except Exception as e:
                         logger.debug(SessionOperationError(e))
                         pass
 
                 @staticmethod
-                def set(item=None, value=None):
+                def set(value=None, item=None):
                     if not item:
                         item = _key
                     if value:
                         try:
-                            redis_target['session'].hset(_name, item, value)
+                            _value = pickle.dumps(value)
+                            redis_target['session'].hset(_name, item, _value)
                             redis_target['session'].expire(_name, timeout)
                         except Exception as e:
                             logger.debug(SessionOperationError(e))
                             pass
 
             if not _obj:
+                # 如果不是对象
                 session = LocalSession()
             else:
                 setattr(_obj, '__session__', LocalSession())
@@ -153,9 +162,8 @@ def redis_session(option_name, key=None, key_option=None, name=None, timeout=864
                 ret = session.get(_key)
             if not ret:
                 ret = func(*args, **kwargs)
-                if _key:
-                    session.set(_key, ret)
+            if write_cache and _key:
+                session.set(_key, ret)
             return ret
         return _wrap_func
     return _wrap
-
