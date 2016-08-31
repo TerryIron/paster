@@ -30,7 +30,7 @@ from Cookie import SimpleCookie
 from functools import wraps, partial
 
 from wsgi import _get_virtual_config, Middleware, WSGIMiddleware, SESSION_LOCAL_NAME, \
-    pop_func_environ, pop_environ_args, push_environ_args
+    pop_func_environ, push_environ_args
 from utils import myException
 from log import get_logger
 
@@ -73,7 +73,19 @@ NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 
 
 def redis_session(option_name, key=None, key_option=None, name=None,
-                  timeout=86400, use_cache=False, write_cache=False):
+                  expired_time=86400, use_cache=False, write_cache=False):
+    """
+    Redis Sesion装饰器, 将session对象绑定在__session__属性
+
+    :param option_name: 连接配置项
+    :param key: 存储的key
+    :param key_option: key的配置项
+    :param name: 存储域配置项
+    :param expired_time: 存活时间
+    :param use_cache: 是否快速使用缓存
+    :param write_cache: 是否写缓存
+    :return:
+    """
     import redis
 
     _connection_name = 'redis_session'
@@ -98,12 +110,13 @@ def redis_session(option_name, key=None, key_option=None, name=None,
     def _wrap(func):
         @wraps(func)
         def _wrap_func(*args, **kwargs):
-            _obj = None
+            _obj, _key = None, None
             if args and hasattr(args[0], func.__name__):
                 _obj = args[0]
             if 'real_key' not in redis_target:
                 config = _get_virtual_config(func, _obj)
-                _key = redis_target['key'](config)
+                if callable(redis_target['key']):
+                    _key = redis_target['key'](config)
                 if _key:
                     redis_target['real_key'] = _key
             else:
@@ -126,13 +139,24 @@ def redis_session(option_name, key=None, key_option=None, name=None,
             class LocalSession(object):
 
                 @staticmethod
+                def clear():
+                    try:
+                        d = redis_target['session'].hgetall(_name)
+                        redis_target['session'].hdel(_name, *d.keys())
+                    except Exception as e:
+                        logger.debug(SessionOperationError(e))
+                        pass
+
+                @staticmethod
                 def get(item=None):
                     if not item:
                         item = _key
                     try:
+                        item = pickle.dumps(item)
                         value = redis_target['session'].hget(_name, item)
-                        _value = pickle.loads(value)
-                        return _value
+                        if value:
+                            value = pickle.loads(value)
+                        return value
                     except Exception as e:
                         logger.debug(SessionOperationError(e))
                         pass
@@ -143,9 +167,13 @@ def redis_session(option_name, key=None, key_option=None, name=None,
                         item = _key
                     if value:
                         try:
-                            _value = pickle.dumps(value)
+                            item = pickle.dumps(item)
+                            try:
+                                _value = pickle.dumps(value)
+                            except:
+                                _value = pickle.dumps({})
                             redis_target['session'].hset(_name, item, _value)
-                            redis_target['session'].expire(_name, timeout)
+                            redis_target['session'].expire(_name, expired_time)
                         except Exception as e:
                             logger.debug(SessionOperationError(e))
                             pass

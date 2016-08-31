@@ -31,6 +31,7 @@ from log import get_logger
 logger = get_logger(__name__)
 
 SESSION_LOCAL_NAME = '__session_id__'
+METHOD_LOCAL_NAME = '__method_name__'
 
 
 class BadRequest(myException):
@@ -139,6 +140,7 @@ class URLMiddleware(Middleware, WSGIMiddleware):
                 target_name = context.get('PATH_INFO', None)
                 method_name = context.get('REQUEST_METHOD', 'GET')
                 if target_name and method_name:
+                    push_environ_args(context, METHOD_LOCAL_NAME, (method_name, ))
                     func_env = context.get('paster.args', {})
 
                     kwargs = context.get('REQUEST_KWARGS', {})
@@ -181,6 +183,13 @@ def _get_route(key):
 
 
 def route(url, method='GET'):
+    """
+    路由装饰器, 将method对象绑定在__method__属性
+
+    :param url: url路径
+    :param method: 请求方式
+    :return:
+    """
     url = str(url)
 
     if isinstance(method, list):
@@ -215,6 +224,12 @@ def route(url, method='GET'):
 
         @wraps(func)
         def wrapper(*args, **kwargs):
+            _obj = None
+            if args and hasattr(args[0], func.__name__):
+                _obj = args[0]
+            if _obj:
+                val, args = pop_func_environ(args, METHOD_LOCAL_NAME)
+                setattr(_obj, '__method__', val)
             return func(*args, **kwargs)
         return wrapper
     return decorator
