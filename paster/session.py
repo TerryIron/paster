@@ -179,7 +179,7 @@ def redis_session(option_name, key=None, key_option=None, name=None,
                             pass
 
             if not _obj:
-                # 如果不是对象
+                # 如果不是对象, 通过设置将输出缓存
                 session = LocalSession()
             else:
                 setattr(_obj, '__session__', LocalSession())

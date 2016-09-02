@@ -59,7 +59,18 @@ def as_config(config_file):
     return config
 
 
-def import_class(class_name):
+def import_class(class_name, root_path=None):
     class_name = str(class_name).split('.')
-    cls = __import__('.'.join(class_name[0:-1]), fromlist=[class_name[-1]])
-    return getattr(cls, class_name[-1])
+    module_name = '.'.join(class_name[0:-1])
+    cls = __import__(module_name, fromlist=[class_name[-1]])
+    try:
+        return getattr(cls, class_name[-1])
+    except:
+        import imp
+        # 为加载模块提供根目录
+        if root_path:
+            import os.path
+            _class_name = str(module_name).replace('.', '/')
+            file_path = os.path.join(root_path, _class_name + '.pyc')
+            s = imp.load_source(class_name[-1], file_path)
+            return getattr(s, class_name[-1])

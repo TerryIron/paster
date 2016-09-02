@@ -92,7 +92,7 @@ def shell_factory(loader, global_conf, **local_conf):
                 mod_conf[k] = v
             model_kwargs = _get_model_kwargs(mod_conf)
             model = loader.get_app(model, global_conf=global_conf)
-            mod = import_class(model)
+            mod = import_class(model, root_path)
             mod = partial(mod, **model_kwargs)
             sh.load_model(mod, config=mod_conf)
     local_conf['shell'] = sh

@@ -104,8 +104,7 @@ class Middleware(object):
             return self.resposne_normal(_context, _start_response)
         except Exception as e:
             import traceback
-            err = traceback.format_exc()
-            logger.debug(err)
+            logger.debug(traceback.format_exc())
             return self.resposne_error(e, start_response)
 
     def process_request(self, context, start_response):
@@ -134,38 +133,32 @@ def pop_environ_args(environ, item):
 class URLMiddleware(Middleware, WSGIMiddleware):
     def process_request(self, context, start_response):
         if self.handler:
-            try:
-                if not hasattr(self.handler, 'run'):
-                    raise NotFound('Resource Handler not found')
-                target_name = context.get('PATH_INFO', None)
-                method_name = context.get('REQUEST_METHOD', 'GET')
-                if target_name and method_name:
-                    push_environ_args(context, METHOD_LOCAL_NAME, (method_name, ))
-                    func_env = context.get('paster.args', {})
+            if not hasattr(self.handler, 'run'):
+                raise NotFound('Resource Handler not found')
+            target_name = context.get('PATH_INFO', None)
+            method_name = context.get('REQUEST_METHOD', 'GET')
+            if target_name and method_name:
+                push_environ_args(context, METHOD_LOCAL_NAME, (method_name, ))
+                func_env = context.get('paster.args', {})
 
-                    kwargs = context.get('REQUEST_KWARGS', {})
-                    try:
-                        request_body_size = int(context.get('CONTENT_LENGTH', 0))
-                    except (ValueError, ):
-                        request_body_size = 0
+                kwargs = context.get('REQUEST_KWARGS', {})
+                try:
+                    request_body_size = int(context.get('CONTENT_LENGTH', 0))
+                except (ValueError, ):
+                    request_body_size = 0
 
-                    request_body = context['wsgi.input'].read(request_body_size)
-                    if request_body:
-                        _kwargs = json.loads(request_body)
-                        kwargs.update(_kwargs)
-                    cb = partial(self.handler.run,
-                                 target_name,
-                                 method_name,
-                                 func_env,
-                                 **kwargs)
-                    context = cb()
-                else:
-                    raise BadRequest()
-            except Exception as e:
-                import traceback
-                err = traceback.format_exc()
-                logger.debug(err)
-                raise e
+                request_body = context['wsgi.input'].read(request_body_size)
+                if request_body:
+                    _kwargs = json.loads(request_body)
+                    kwargs.update(_kwargs)
+                cb = partial(self.handler.run,
+                             target_name,
+                             method_name,
+                             func_env,
+                             **kwargs)
+                context = cb()
+            else:
+                raise BadRequest('Bad request for {0}:{1}'.format(target_name, method_name))
         return super(URLMiddleware, self).process_request(context, start_response)
 
 
@@ -235,6 +228,16 @@ def route(url, method='GET'):
     return decorator
 
 
+def enter():
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            args = clean_func_environ(args)
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
 def _get_virtual_config(func, class_object=None):
     # Support decorator
     if class_object:
@@ -261,14 +264,25 @@ def get_virtual_config(class_object=None):
 
 def pop_func_environ(d, item):
     val = None
-    if len(d) > 1:
+    if d:
         env = d[-1]
-        val = env.pop(item, None)
+        if len(env) > 0:
+            val = env.pop(item, None)
         if len(env) == 0:
             d = list(d)
             d.pop(-1)
             d = tuple(d)
     return val, d
+
+
+def clean_func_environ(d):
+    if d:
+        env = d[-1]
+        if isinstance(env, dict):
+            d = list(d)
+            d.pop(-1)
+            d = tuple(d)
+    return d
 
 
 class VirtualShell(object):
@@ -299,16 +313,7 @@ class VirtualShell(object):
             environ = {}
             environ.update(env)
 
-            try:
-                return meth(environ, **kwargs)
-            except TypeError as e:
-                if func_name and 'arguments' and 'given' in str(e):
-                    return meth(**kwargs)
-                else:
-                    raise e
-            except Exception as e:
-                raise e
-
+            return meth(environ, **kwargs)
         else:
             raise NotFound()
 
