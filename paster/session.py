@@ -29,7 +29,7 @@ import urlparse
 from Cookie import SimpleCookie
 from functools import wraps, partial
 
-from wsgi import _get_virtual_config, Middleware, WSGIMiddleware, SESSION_LOCAL_NAME, \
+from wsgi import get_virtual_config_inside, Middleware, WSGIMiddleware, SESSION_LOCAL_NAME, \
     get_func_environ, push_environ_args, runner_return
 from utils import myException
 from log import get_logger
@@ -116,7 +116,7 @@ def redis_session(option_name, key=None, key_option=None, name=None,
             if args and hasattr(args[0], func.__name__):
                 _obj = args[0]
             if 'real_key' not in redis_target:
-                config = _get_virtual_config(func, _obj)
+                config = get_virtual_config_inside(func, _obj)
                 if callable(redis_target['key']):
                     _key = redis_target['key'](config)
                 if _key:
@@ -130,7 +130,7 @@ def redis_session(option_name, key=None, key_option=None, name=None,
             else:
                 _name = name
             if 'session' not in redis_target:
-                config = _get_virtual_config(func, _obj)
+                config = get_virtual_config_inside(func, _obj)
                 url = urlparse.urlparse(config[option_name])
                 host, port = url.netloc.split(':')
                 pool = redis.ConnectionPool(host=host, port=port)

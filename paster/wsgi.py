@@ -230,7 +230,7 @@ def route(url, method='GET', class_member_name='__method__'):
     return _wrap
 
 
-def _get_virtual_config(func, class_object=None):
+def get_virtual_config_inside(func, class_object=None):
     # Support decorator
     if class_object:
         _name = str(class_object.__class__).split()[1].strip('>').strip("'")
