@@ -30,7 +30,7 @@ from Cookie import SimpleCookie
 from functools import wraps, partial
 
 from wsgi import _get_virtual_config, Middleware, WSGIMiddleware, SESSION_LOCAL_NAME, \
-    pop_func_environ, push_environ_args
+    get_func_environ, push_environ_args, runner_return
 from utils import myException
 from log import get_logger
 
@@ -73,9 +73,10 @@ NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 
 
 def redis_session(option_name, key=None, key_option=None, name=None,
-                  expired_time=86400, use_cache=False, write_cache=False):
+                  expired_time=86400, use_cache=False, write_cache=False,
+                  class_member_name='__session__', test_id=0):
     """
-    Redis Sesion装饰器, 将session对象绑定在__session__属性
+    Redis Sesion装饰器, 将session对象绑定在__session__(类缓存对象名)属性
 
     :param option_name: 连接配置项
     :param key: 存储的key
@@ -84,6 +85,7 @@ def redis_session(option_name, key=None, key_option=None, name=None,
     :param expired_time: 存活时间
     :param use_cache: 是否快速使用缓存
     :param write_cache: 是否写缓存
+    :param class_member_name: 类缓存对象名
     :return:
     """
     import redis
@@ -122,7 +124,7 @@ def redis_session(option_name, key=None, key_option=None, name=None,
             else:
                 _key = redis_target['real_key']
             if not name:
-                _name, args = pop_func_environ(args, SessionMiddleware.SESSION_LOCAL_NAME)
+                _name = get_func_environ(args, SessionMiddleware.SESSION_LOCAL_NAME)
                 if not _name:
                     _name = str(uuid.uuid5(NAMESPACE_DNS, str(_key)))
             else:
@@ -182,14 +184,14 @@ def redis_session(option_name, key=None, key_option=None, name=None,
                 # 如果不是对象, 通过设置将输出缓存
                 session = LocalSession()
             else:
-                setattr(_obj, '__session__', LocalSession())
-                session = getattr(_obj, '__session__')
+                setattr(_obj, class_member_name, LocalSession())
+                session = getattr(_obj, class_member_name)
             ret = None
 
             if use_cache and _key:
                 ret = session.get(_key)
             if not ret:
-                ret = func(*args, **kwargs)
+                ret = runner_return(func, *args, **kwargs)
             if write_cache and _key:
                 session.set(_key, ret)
             return ret

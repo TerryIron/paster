@@ -175,12 +175,13 @@ def _get_route(key):
         return DEFAULT_ROUTES[key]
 
 
-def route(url, method='GET'):
+def route(url, method='GET', class_member_name='__method__'):
     """
-    路由装饰器, 将method对象绑定在__method__属性
+    路由装饰器, 将method对象绑定在__method__(类对象缓存名)属性
 
     :param url: url路径
     :param method: 请求方式
+    :param class_member_name: 类对象缓存名
     :return:
     """
     url = str(url)
@@ -221,18 +222,10 @@ def route(url, method='GET'):
             if args and hasattr(args[0], func.__name__):
                 _obj = args[0]
             if _obj:
-                val, args = pop_func_environ(args, METHOD_LOCAL_NAME)
-                setattr(_obj, '__method__', val)
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
+                val = get_func_environ(args, METHOD_LOCAL_NAME)
+                if val:
+                    setattr(_obj, class_member_name, val)
 
-
-def enter():
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            args = clean_func_environ(args)
             return func(*args, **kwargs)
         return wrapper
     return decorator
@@ -262,27 +255,24 @@ def get_virtual_config(class_object=None):
     return VirtualShell.config.get(_name, {})
 
 
-def pop_func_environ(d, item):
-    val = None
+def get_func_environ(d, item):
     if d:
         env = d[-1]
-        if len(env) > 0:
-            val = env.pop(item, None)
-        if len(env) == 0:
-            d = list(d)
-            d.pop(-1)
-            d = tuple(d)
-    return val, d
+        return env.get(item, None) if isinstance(env, dict) else None
+    else:
+        return None
 
 
-def clean_func_environ(d):
-    if d:
-        env = d[-1]
-        if isinstance(env, dict):
-            d = list(d)
-            d.pop(-1)
-            d = tuple(d)
-    return d
+def ignore_function_environ(d):
+    val = () if not d else (d[0], )
+    return val
+
+
+def runner_return(func, *args, **kwargs):
+    if str(func.__code__).split()[2] == func.__name__:
+        return func(*args, **kwargs)
+    else:
+        return func(*ignore_function_environ(args), **kwargs)
 
 
 class VirtualShell(object):
