@@ -199,7 +199,7 @@ def route(url, method='GET', class_member_name='__method__'):
 
     url_re = re.compile(url)
 
-    def decorator(func):
+    def _wrap(func):
         cls_name = inspect.stack()[1][3]
         if not cls_name == '<module>':
             mod_name = '.'.join([func.__module__, cls_name])
@@ -217,18 +217,17 @@ def route(url, method='GET', class_member_name='__method__'):
             mod_dict[_pack][url_re] = (mod_name, func_name)
 
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def _wrap_func(*args, **kwargs):
             _obj = None
             if args and hasattr(args[0], func.__name__):
                 _obj = args[0]
             if _obj:
                 val = get_func_environ(args, METHOD_LOCAL_NAME)
-                if val:
-                    setattr(_obj, class_member_name, val)
+                setattr(_obj, class_member_name, val if val else ())
 
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
+            return runner_return(func, *args, **kwargs)
+        return _wrap_func
+    return _wrap
 
 
 def _get_virtual_config(func, class_object=None):
