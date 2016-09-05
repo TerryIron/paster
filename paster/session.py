@@ -74,7 +74,7 @@ NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 
 def redis_session(option_name, key=None, key_option=None, name=None,
                   expired_time=86400, use_cache=False, write_cache=False,
-                  class_member_name='__session__', test_id=0):
+                  class_member_name='__session__'):
     """
     Redis Sesion装饰器, 将session对象绑定在__session__(类缓存对象名)属性
 
