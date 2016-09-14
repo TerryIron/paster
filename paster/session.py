@@ -30,7 +30,7 @@ from Cookie import SimpleCookie
 from functools import wraps, partial
 
 from wsgi import get_virtual_config_inside, Middleware, WSGIMiddleware, SESSION_LOCAL_NAME, \
-    get_func_environ, push_environ_args, runner_return
+    get_func_environ, push_environ_args, runner_return, get_self_object
 from utils import myException
 from log import get_logger
 
@@ -112,9 +112,7 @@ def redis_session(option_name, key=None, key_option=None, name=None,
     def _wrap(func):
         @wraps(func)
         def _wrap_func(*args, **kwargs):
-            _obj, _key = None, None
-            if args and hasattr(args[0], func.__name__):
-                _obj = args[0]
+            _obj, _key = get_self_object(func, *args), None
             if 'real_key' not in redis_target:
                 config = get_virtual_config_inside(func, _obj)
                 if callable(redis_target['key']):

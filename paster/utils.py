@@ -21,7 +21,6 @@
 __author__ = 'terry'
 
 import re
-import inspect
 import ConfigParser
 
 
@@ -71,6 +70,6 @@ def import_class(class_name, root_path=None):
         if root_path:
             import os.path
             _class_name = str(module_name).replace('.', '/')
-            file_path = os.path.join(root_path, _class_name + '.pyc')
+            file_path = os.path.join(root_path, _class_name + '.py')
             s = imp.load_source(class_name[-1], file_path)
             return getattr(s, class_name[-1])

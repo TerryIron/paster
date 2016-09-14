@@ -222,9 +222,7 @@ def route(url, method='GET', class_member_name='__method__'):
 
         @wraps(func)
         def _wrap_func(*args, **kwargs):
-            _obj = None
-            if args and hasattr(args[0], func.__name__):
-                _obj = args[0]
+            _obj = get_self_object(func, *args)
             if _obj:
                 val = get_func_environ(args, METHOD_LOCAL_NAME)
                 setattr(_obj, class_member_name, val if val else ())
@@ -232,6 +230,13 @@ def route(url, method='GET', class_member_name='__method__'):
             return runner_return(func, *args, **kwargs)
         return _wrap_func
     return _wrap
+
+
+def get_self_object(func, *args):
+    _obj = None
+    if args and hasattr(args[0], func.__name__):
+        _obj = args[0]
+    return _obj
 
 
 def get_virtual_config_inside(func, class_object=None):
@@ -267,12 +272,15 @@ def get_func_environ(d, item):
 
 
 def ignore_function_environ(d):
-    val = () if not d else (d[0], )
+    if len(d) > 1:
+        val = tuple(d[1:-1]) if isinstance(d[-1], dict) else tuple(d[1:])
+    else:
+        val = () if not d or isinstance(d[0], dict) else (d[0], )
     return val
 
 
 def runner_return(func, *args, **kwargs):
-    if str(func.__code__).split()[2] == func.__name__:
+    if str(func.__code__).split()[2] != func.__name__:
         return func(*args, **kwargs)
     else:
         return func(*ignore_function_environ(args), **kwargs)
