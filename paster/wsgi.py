@@ -273,7 +273,7 @@ def get_func_environ(d, item):
 
 def ignore_function_environ(d):
     if len(d) > 1:
-        val = tuple(d[1:-1]) if isinstance(d[-1], dict) else tuple(d[1:])
+        val = tuple(d[:-1]) if isinstance(d[-1], dict) else tuple(d[:])
     else:
         val = () if not d or isinstance(d[0], dict) else (d[0], )
     return val
