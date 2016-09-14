@@ -48,6 +48,10 @@ class NotFound(myException):
     error_code = 104
 
 
+class BaseException(myException):
+    pass
+
+
 class WSGIMiddleware(object):
 
     middleware = []
