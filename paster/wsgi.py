@@ -54,7 +54,7 @@ class BaseException(myException):
 
 class WSGIMiddleware(object):
 
-    middleware = []
+    middleware = {}
 
     @classmethod
     def factory(cls, global_config, **local_config):
@@ -64,7 +64,9 @@ class WSGIMiddleware(object):
         for k, v in getattr(global_config, '_defaults', {}).items():
             _global_config[k] = v
         global_config = _global_config
-        cls.middleware.append((cls, global_config, local_config, sh))
+        if local_config['__path__'] not in cls.middleware:
+            cls.middleware[local_config['__path__']] = []
+        cls.middleware[local_config['__path__']].append((cls, global_config, local_config, sh))
 
         def call_factory(context=None, start_response=None):
             return cls._factory(context, start_response)
@@ -74,7 +76,7 @@ class WSGIMiddleware(object):
     def _factory(cls, context, start_response=None):
         _start_response = start_response
         _context = type('Response', (), {'content': None, 'status_code': 200})
-        for c, _conf, _local_conf, sh in cls.middleware[::-1]:
+        for c, _conf, _local_conf, sh in cls.middleware[context['SCRIPT_NAME']][::-1]:
             c = c(sh, _conf, **_local_conf)
             context, _start_response = c.__call__(context, _start_response)
         if isinstance(context, Exception):
@@ -86,7 +88,7 @@ class WSGIMiddleware(object):
             else:
                 context = dict(err_msg='')
             _context.status_code = status_code
-        _context.content = context
+        _context.content = context if context else None
         return _context, _start_response
 
 

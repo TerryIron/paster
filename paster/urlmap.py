@@ -23,11 +23,13 @@ __author__ = 'terry'
 import json
 import werkzeug.http
 import urlparse
+import copy
 from paste.urlmap import URLMap as _URLMap, parse_path_expression
 from zope.mimetype import typegetter
 
 from utils import myException
 from http import HttpResponse
+from wsgi import NotFound
 
 
 def urlmap_factory(loader, global_conf, **local_conf):
@@ -40,7 +42,11 @@ def urlmap_factory(loader, global_conf, **local_conf):
     _map = URLMap(not_found_app=not_found_app)
     for path, app_name in local_conf.items():
         path = parse_path_expression(path)
-        app = loader.get_app(app_name, global_conf=global_conf)
+        _global_conf = copy.copy(global_conf)
+        if '__path__' not in _global_conf:
+            _global_conf['__path__'] = ''
+        _global_conf['__path__'] += path
+        app = loader.get_app(app_name, global_conf=_global_conf)
         _map[path] = app
     return _map
 
@@ -79,7 +85,6 @@ class URLMap(_URLMap):
             environ['SCRIPT_NAME'] += app_url
             environ['PATH_INFO'] = path_info[len(app_url):]
             return app(environ, start_response)
-
         return wrap
 
     def _path_strategy(self, host, port, path_info):
@@ -131,6 +136,24 @@ class URLMap(_URLMap):
                 app = self._set_script_name(app, app_url)
 
         return mime_type, app
+
+    def not_found(self, environ, start_response):
+        mime_type, err = self.get_support_mimetype(), NotFound()
+        _header = (('CONTENT-TYPE', mime_type), )
+        start_response(self.get_status_code(err.status_code), list(_header), )
+        return json.dumps(dict(err_msg=str(err), err_code=err.error_code), ensure_ascii=False)
+
+    @staticmethod
+    def get_support_mimetype():
+        return SUPPORTED_CONTENT_TYPES[0]
+
+    @staticmethod
+    def get_status_code(status_code):
+        status_code = str(status_code)
+        if status_code == '200':
+            return status_code + ' OK'
+        else:
+            return status_code + ' Oops'
 
     def __call__(self, environ, start_response=None):
         host = environ.get('HTTP_HOST', environ.get('SERVER_NAME')).lower()
@@ -186,31 +209,33 @@ class URLMap(_URLMap):
                 environ['REQUEST_KWARGS'] = dict()
                 for k, v in urlparse.parse_qs(environ['QUERY_STRING']).items():
                     environ['REQUEST_KWARGS'][k] = v[0]
-            val, _start_response = app(environ, start_response)
+            environ['paster.result'] = type('ResultIO', (), {'result': None})
+            val = app(environ, start_response)
+            try:
+                result, result_response = val
+                environ['paster.result'].result = val
+            except:
+                result, result_response = environ['paster.result'].result
             mime_type = typegetter.mimeTypeGuesser(name=path_info)
             if not mime_type:
-                mime_type = SUPPORTED_CONTENT_TYPES[0]
+                mime_type = self.get_support_mimetype()
 
-            val.content = val.content if val.content else []
+            result.content = result.content if result.content else []
 
             def _get_status_code(_val):
                 status_code = str(_val.status_code)
-                if status_code == '200':
-                    return status_code + ' OK'
-                else:
-                    return status_code + ' Oops'
+                return self.get_status_code(status_code)
 
-            if isinstance(val, HttpResponse):
-                _header = set([(k.upper(), v) for k, v in val.headers.items()])
+            if isinstance(result, HttpResponse):
+                _header = set([(k.upper(), v) for k, v in result.headers.items()])
                 _header.add(('CONTENT-TYPE', mime_type))
-                _start_response(_get_status_code(val), list(_header), )
+                result_response(_get_status_code(result), list(_header), )
 
                 return val.content
             else:
                 _header = (('CONTENT-TYPE', mime_type), )
-                _start_response(_get_status_code(val), list(_header), )
+                result_response(_get_status_code(result), list(_header), )
 
-                return json.dumps(val.content, ensure_ascii=False)
+                return json.dumps(result.content, ensure_ascii=False)
 
-        environ['paste.urlmap_object'] = self
-        return self.not_found_application(environ, start_response)
+        return self.not_found(environ, start_response)

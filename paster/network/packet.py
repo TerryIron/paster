@@ -23,6 +23,7 @@ __author__ = 'terry'
 
 import struct
 import logging
+from functools import wraps
 
 
 LOG = logging.getLogger(__name__)
@@ -146,6 +147,20 @@ class Packet(object):
         raise NotImplementedError()
 
 
-
-
-
+def push_status(name, help_text, location='status'):
+    def _wrap(func):
+        @wraps(func)
+        def _wrap_func(*args, **kwargs):
+            val = func(*args, **kwargs)
+            _dict = getattr(args[0], location, {})
+            if name not in _dict:
+                _dict[name] = {}
+            _name_dict = _dict[name]
+            if 'help_text' not in _name_dict:
+                _name_dict['help_text'] = help_text
+            if 'log_data' not in _name_dict:
+                _name_dict['log_data'] = val
+            setattr(args[0], location, _dict)
+            return val
+        return _wrap_func
+    return _wrap

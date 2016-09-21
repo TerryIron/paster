@@ -79,6 +79,7 @@ def shell_factory(loader, global_conf, **local_conf):
     sh = import_class(shell_class)(**shell_class_kw)
     sh.load_root(root_path)
     conf = as_config(global_conf['__file__'])
+    local_conf['__path__'] = global_conf.pop('__path__', '/')
     for shell in shells:
         sh_conf = dict()
         for k, v in conf.items('shell:{0}'.format(shell)):
@@ -125,6 +126,7 @@ def platform_factory(loader, global_conf, **local_conf):
 
 def filter_factory(global_conf, **local_conf):
     _filter_factory = local_conf.pop('paste.filter_factory')
+    local_conf['__path__'] = global_conf.pop('__path__', '/')
     _filter = _load_factory(_filter_factory, global_conf, **local_conf)
     return _filter
 
@@ -140,7 +142,11 @@ def rpcmap_factory(loader, global_conf, **local_conf):
     rpcmap = RPCMap(not_found_app=not_found_app)
     for rpc_line, app_name in local_conf.items():
         rpc_line = parse_rpcline_expression(rpc_line)
-        app = loader.get_app(app_name, global_conf=global_conf)
+        _global_conf = copy.copy(global_conf)
+        if '__path__' not in _global_conf:
+            _global_conf['__path__'] = ''
+        _global_conf['__path__'] += rpc_line
+        app = loader.get_app(app_name, global_conf=_global_conf)
         rpcmap[rpc_line] = app
     return rpcmap
 

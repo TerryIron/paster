@@ -21,7 +21,7 @@
 __author__ = 'terry'
 
 
-from packet import Packet, PacketVerError, PacketItemUnexpected, PacketErrorMsg, PacketWarnMsg
+from packet import Packet, PacketVerError, PacketItemUnexpected, PacketErrorMsg, PacketWarnMsg, push_status
 
 
 class IPv4(Packet):
@@ -33,7 +33,7 @@ class IPv4(Packet):
     """
     IP V4 Header
 
-    See details in RFC791.
+    See details in RPC760, RFC791.
     """
     FORMAT = [
         ('version', 4),
@@ -50,6 +50,7 @@ class IPv4(Packet):
         ('dst_addr', 32),
     ]
 
+    @push_status('version', '版本信息')
     def _check_version(self):
         val = self.__getitem__('version')
         if val != 4:
@@ -121,6 +122,11 @@ class IPv4(Packet):
 
 
 class IPv6(Packet):
+    """
+    IP V6 Header
+
+    See details in RFC2460.
+    """
     FORMAT = [
         ('version', 4),
         ('traffic_class', 8),
