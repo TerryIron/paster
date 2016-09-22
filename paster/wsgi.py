@@ -301,10 +301,12 @@ class VirtualShell(object):
             raise NotFound()
         apis = self.mapping_api[method]
         selected_name = None
+        logger.debug('api names:{0}'.format(apis.keys()))
         for k in apis.keys():
             if k.match(name):
                 selected_name = k
                 break
+        logger.debug('get selected name:{0}'.format(selected_name))
         if selected_name:
             mod_name, func_name = apis[selected_name]
             if not mod_name:

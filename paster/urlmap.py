@@ -30,6 +30,9 @@ from zope.mimetype import typegetter
 from utils import myException
 from http import HttpResponse
 from wsgi import NotFound
+from log import get_logger
+
+logger = get_logger(__name__)
 
 
 def urlmap_factory(loader, global_conf, **local_conf):
@@ -210,12 +213,16 @@ class URLMap(_URLMap):
                 for k, v in urlparse.parse_qs(environ['QUERY_STRING']).items():
                     environ['REQUEST_KWARGS'][k] = v[0]
             environ['paster.result'] = type('ResultIO', (), {'result': None})
+            logger.debug(environ)
             val = app(environ, start_response)
             try:
                 result, result_response = val
                 environ['paster.result'].result = val
             except:
-                result, result_response = environ['paster.result'].result
+                try:
+                    result, result_response = environ['paster.result'].result
+                except:
+                    return self.not_found(environ, start_response)
             mime_type = typegetter.mimeTypeGuesser(name=path_info)
             if not mime_type:
                 mime_type = self.get_support_mimetype()
