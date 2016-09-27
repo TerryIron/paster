@@ -28,8 +28,8 @@ from paste.urlmap import URLMap as _URLMap, parse_path_expression
 from zope.mimetype import typegetter
 
 from utils import myException
-from http import HttpResponse
 from wsgi import NotFound
+from http import is_response_wrapper
 from log import get_logger
 
 logger = get_logger(__name__)
@@ -227,22 +227,26 @@ class URLMap(_URLMap):
             if not mime_type:
                 mime_type = self.get_support_mimetype()
 
-            result.content = result.content if result.content else []
+            def _verify_content(_result):
+                _result.content = _result.content if _result.content else []
 
             def _get_status_code(_val):
                 status_code = str(_val.status_code)
                 return self.get_status_code(status_code)
 
-            if isinstance(result, HttpResponse):
-                _header = set([(k.upper(), v) for k, v in result.headers.items()])
+            target = result.content
+            if is_response_wrapper(target):
+                _header = set([(k.upper(), v) for k, v in target.headers.items()])
                 _header.add(('CONTENT-TYPE', mime_type))
-                result_response(_get_status_code(result), list(_header), )
+                result_response(_get_status_code(target), list(_header), )
 
-                return val.content
+                _verify_content(target)
+                return target.content
             else:
                 _header = (('CONTENT-TYPE', mime_type), )
                 result_response(_get_status_code(result), list(_header), )
 
+                _verify_content(result)
                 return json.dumps(result.content, ensure_ascii=False)
 
         return self.not_found(environ, start_response)

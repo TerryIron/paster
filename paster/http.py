@@ -21,7 +21,23 @@
 __author__ = 'terry'
 
 
-class HttpResponse(object):
+import os.path
+from zope.mimetype import typegetter
+
+
+def is_response_wrapper(obj):
+    if hasattr(obj, 'headers') and hasattr(obj, 'content'):
+        return True
+    else:
+        return False
+
+
+def check_mime_type(filename):
+    _filename = os.path.basename(filename)
+    content_type = typegetter.mimeTypeGuesser(name=_filename)
+    return content_type
+
+class BaseResponse(object):
     def __init__(self, content=None, headers=None, status_code=200):
         self.content = content
         self.status_code = status_code
@@ -29,3 +45,44 @@ class HttpResponse(object):
         headers = headers if headers else {}
         _headers.update(headers)
         self.headers = _headers
+        self.init()
+
+    def init(self):
+        pass
+
+
+class HttpResponse(BaseResponse):
+    pass
+
+
+class HttpUpload(BaseResponse):
+    def __init__(self, filename=None):
+        f = open(filename)
+        content = f.read()
+        content_type = check_mime_type(filename)
+        content_type = content_type if content_type else 'application/octet-stream'
+        headers = {'Content-Disposition': 'attachment;'
+                                          'filename={0};'
+                                          'filename*=utf-8 {0}'.format(filename),
+                   'Content-Length': str(len(content)),
+                   'Content-Type': content_type}
+        super(HttpUpload, self).__init__(content, headers, status_code=200)
+
+
+class HttpDownload(BaseResponse):
+    def __init__(self, filename=None):
+        f = open(filename)
+        content = f.read()
+        content_type = check_mime_type(filename)
+        content_type = content_type if content_type else 'application/octet-stream'
+        headers = {'Content-Disposition': 'attachment;'
+                                          'filename={0};'
+                                          'filename*=utf-8 {0}'.format(filename),
+                   'Content-Length': str(len(content)),
+                   'Content-Type': content_type}
+        super(HttpDownload, self).__init__(content, headers, status_code=200)
+
+
+class HttpRender(BaseResponse):
+    pass
+

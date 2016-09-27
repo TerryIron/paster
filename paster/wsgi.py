@@ -30,9 +30,6 @@ from log import get_logger
 
 logger = get_logger(__name__)
 
-SESSION_LOCAL_NAME = '__session_id__'
-METHOD_LOCAL_NAME = '__method_name__'
-
 
 class BadRequest(myException):
     """Raised when request comming with invalid data """
@@ -137,6 +134,8 @@ def pop_environ_args(environ, item):
 
 
 class URLMiddleware(Middleware, WSGIMiddleware):
+    METHOD_LOCAL_NAME = '__method_name__'
+    
     def process_request(self, context, start_response):
         if self.handler:
             if not hasattr(self.handler, 'run'):
@@ -144,7 +143,7 @@ class URLMiddleware(Middleware, WSGIMiddleware):
             target_name = context.get('PATH_INFO', None)
             method_name = context.get('REQUEST_METHOD', 'GET')
             if target_name and method_name:
-                push_environ_args(context, METHOD_LOCAL_NAME, (method_name, ))
+                push_environ_args(context, URLMiddleware.METHOD_LOCAL_NAME, (method_name, ))
                 func_env = context.get('paster.args', {})
 
                 kwargs = context.get('REQUEST_KWARGS', {})
@@ -226,7 +225,7 @@ def route(url, method='GET', class_member_name='__method__'):
         def _wrap_func(*args, **kwargs):
             _obj = get_self_object(func, *args)
             if _obj:
-                val = get_func_environ(args, METHOD_LOCAL_NAME)
+                val = get_func_environ(args, URLMiddleware.METHOD_LOCAL_NAME)
                 setattr(_obj, class_member_name, val if val else ())
 
             return runner_return(func, *args, **kwargs)
@@ -301,12 +300,10 @@ class VirtualShell(object):
             raise NotFound()
         apis = self.mapping_api[method]
         selected_name = None
-        logger.debug('api names:{0}'.format(apis.keys()))
         for k in apis.keys():
             if k.match(name):
                 selected_name = k
                 break
-        logger.debug('get selected name:{0}'.format(selected_name))
         if selected_name:
             mod_name, func_name = apis[selected_name]
             if not mod_name:

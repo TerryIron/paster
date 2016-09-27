@@ -29,7 +29,7 @@ import urlparse
 from Cookie import SimpleCookie
 from functools import wraps, partial
 
-from wsgi import get_virtual_config_inside, Middleware, WSGIMiddleware, SESSION_LOCAL_NAME, \
+from wsgi import get_virtual_config_inside, Middleware, WSGIMiddleware, \
     get_func_environ, push_environ_args, runner_return, get_self_object
 from utils import myException
 from log import get_logger
@@ -43,7 +43,7 @@ class SessionOperationError(myException):
 
 class SessionMiddleware(Middleware, WSGIMiddleware):
     SESSION_KEY = 'session_id'
-    SESSION_LOCAL_NAME = SESSION_LOCAL_NAME
+    SESSION_LOCAL_NAME = '__session_id__'
 
     def process_request(self, context, start_response):
         _cookie = SimpleCookie()
