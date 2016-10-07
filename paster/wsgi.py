@@ -23,6 +23,7 @@ __author__ = 'terry'
 import re
 import json
 import inspect
+from io import BytesIO
 from functools import partial, wraps
 
 from utils import myException, as_config
@@ -143,8 +144,6 @@ class URLMiddleware(Middleware, WSGIMiddleware):
             target_name = context.get('PATH_INFO', None)
             method_name = context.get('REQUEST_METHOD', 'GET')
             if target_name and method_name:
-                push_environ_args(context, URLMiddleware.METHOD_LOCAL_NAME, (method_name, ))
-                func_env = context.get('paster.args', {})
 
                 kwargs = context.get('REQUEST_KWARGS', {})
                 try:
@@ -152,10 +151,43 @@ class URLMiddleware(Middleware, WSGIMiddleware):
                 except (ValueError, ):
                     request_body_size = 0
 
-                request_body = context['wsgi.input'].read(request_body_size)
-                if request_body:
-                    _kwargs = json.loads(request_body)
-                    kwargs.update(_kwargs)
+                content_type = context.get('CONTENT_TYPE', 'application/x-www-form-urlencoded')
+                content_type = str(content_type).split()[0].strip(';')
+                _file = None
+
+                def process_request_body():
+                    def text_plain_process(rbody):
+                        global _file
+                        _file = BytesIO(rbody)
+
+                    def key_value_process(rbody):
+                        text_plain_process(rbody)
+                        try:
+                            _kwargs = json.loads(rbody)
+                            kwargs.update(_kwargs)
+                        except:
+                            pass
+
+                    def form_data_process(rbody):
+                        text_plain_process(rbody)
+
+                    _process = {
+                        'application/x-www-form-urlencoded': key_value_process,
+                        'multipart/form-data': form_data_process,
+                        'text/plain': text_plain_process,
+                    }
+
+                    if content_type in _process:
+                        request_body = context['wsgi.input'].read(request_body_size)
+                        if request_body:
+                            _process[content_type](request_body)
+                process_request_body()
+                push_environ_args(context,
+                                  URLMiddleware.METHOD_LOCAL_NAME,
+                                  dict(method=method_name,
+                                       file=_file,
+                                       url=target_name))
+                func_env = context.get('paster.args', {})
                 cb = partial(self.handler.run,
                              target_name,
                              method_name,
@@ -226,7 +258,7 @@ def route(url, method='GET', class_member_name='__method__'):
             _obj = get_self_object(func, *args)
             if _obj:
                 val = get_func_environ(args, URLMiddleware.METHOD_LOCAL_NAME)
-                setattr(_obj, class_member_name, val if val else ())
+                setattr(_obj, class_member_name, val)
 
             return runner_return(func, *args, **kwargs)
         return _wrap_func
@@ -267,9 +299,9 @@ def get_virtual_config(class_object=None):
 def get_func_environ(d, item):
     if d:
         env = d[-1]
-        return env.get(item, None) if isinstance(env, dict) else None
+        return env.get(item, {}) if isinstance(env, dict) else {}
     else:
-        return None
+        return {}
 
 
 def ignore_function_environ(d):

@@ -149,6 +149,7 @@ def redis_session(option_name, key=None, key_option=None, name=None,
 
                 @staticmethod
                 def get(item=None):
+                    logger.debug('get item {0} {1}'.format(_name, _key))
                     if not item:
                         item = _key
                     try:
@@ -163,6 +164,7 @@ def redis_session(option_name, key=None, key_option=None, name=None,
 
                 @staticmethod
                 def set(value=None, item=None):
+                    logger.debug('set item {0} {1}'.format(_name, _key))
                     if not item:
                         item = _key
                     if value:
