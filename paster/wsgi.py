@@ -51,8 +51,8 @@ class BaseException(myException):
 
 
 class WSGIMiddleware(object):
-
     middleware = {}
+    app_name_re = re.compile('^(\[[^]]*\]).*')
 
     @classmethod
     def factory(cls, global_config, **local_config):
@@ -62,19 +62,25 @@ class WSGIMiddleware(object):
         for k, v in getattr(global_config, '_defaults', {}).items():
             _global_config[k] = v
         global_config = _global_config
-        if local_config['__path__'] not in cls.middleware:
-            cls.middleware[local_config['__path__']] = []
-        cls.middleware[local_config['__path__']].append((cls, global_config, local_config, sh))
 
-        def call_factory(context=None, start_response=None):
-            return cls._factory(context, start_response)
-        return call_factory
+        _local_name = local_config['__path__']
+        _local_app_name = cls.app_name_re.match(_local_name).groups()[0]
+        if _local_name not in cls.middleware:
+            cls.middleware[_local_name] = []
+        cls.middleware[_local_name].append((cls, global_config, local_config, sh))
+
+        def call_factory(context=None, start_response=None, app_name=None):
+            return cls._factory(context, start_response, app_name=app_name)
+
+        call_factory_wrap = partial(call_factory, app_name=_local_app_name)
+        return call_factory_wrap
 
     @classmethod
-    def _factory(cls, context, start_response=None):
+    def _factory(cls, context, start_response=None, app_name=None):
         _start_response = start_response
         _context = type('Response', (), {'content': None, 'status_code': 200})
-        for c, _conf, _local_conf, sh in cls.middleware[context['SCRIPT_NAME']][::-1]:
+        _composite_url = app_name + context['SCRIPT_NAME']
+        for c, _conf, _local_conf, sh in cls.middleware[_composite_url][::-1]:
             c = c(sh, _conf, **_local_conf)
             context, _start_response = c.__call__(context, _start_response)
         if isinstance(context, Exception):
@@ -182,10 +188,22 @@ class URLMiddleware(Middleware, WSGIMiddleware):
                         if request_body:
                             _process[content_type](request_body)
                 process_request_body()
+
+                class HeaderDict(dict):
+                    def __getitem__(self, item):
+                        super(HeaderDict, self).__getitem__(str(item).lower())
+
+                    def __setitem__(self, item, value):
+                        super(HeaderDict, self).__setitem__(str(item).lower(), value)
+
+                headers_env = HeaderDict()
+                for k in [key.split('HTTP_')[1] for key in context.keys() if key.startswith('HTTP_') and len(key) > 5]:
+                    headers_env[k] = context['HTTP_' + k]
                 push_environ_args(context,
                                   URLMiddleware.METHOD_LOCAL_NAME,
                                   dict(method=method_name,
                                        file=_file,
+                                       headers=headers_env,
                                        url=target_name))
                 func_env = context.get('paster.args', {})
                 cb = partial(self.handler.run,
@@ -328,6 +346,8 @@ class VirtualShell(object):
         self.mapping_api = {}
 
     def run(self, name, method, env, **kwargs):
+        print 11111, self, self.mapping_api
+        print 22222, self, method
         if method not in self.mapping_api:
             raise NotFound()
         apis = self.mapping_api[method]
@@ -372,6 +392,7 @@ class VirtualShell(object):
             else:
                 self.objects[mod_name] = mod
 
+        print 3333, self, mod_name
         # Update object-function mapping
         self._update_mapping(mod_name)
         # Update function mapping

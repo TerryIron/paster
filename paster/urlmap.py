@@ -47,7 +47,7 @@ def urlmap_factory(loader, global_conf, **local_conf):
         path = parse_path_expression(path)
         _global_conf = copy.copy(global_conf)
         if '__path__' not in _global_conf:
-            _global_conf['__path__'] = ''
+            _global_conf['__path__'] = '[{0}]'.format(app_name)
         _global_conf['__path__'] += path
         app = loader.get_app(app_name, global_conf=_global_conf)
         _map[path] = app
