@@ -346,8 +346,6 @@ class VirtualShell(object):
         self.mapping_api = {}
 
     def run(self, name, method, env, **kwargs):
-        print 11111, self, self.mapping_api
-        print 22222, self, method
         if method not in self.mapping_api:
             raise NotFound()
         apis = self.mapping_api[method]
@@ -392,7 +390,6 @@ class VirtualShell(object):
             else:
                 self.objects[mod_name] = mod
 
-        print 3333, self, mod_name
         # Update object-function mapping
         self._update_mapping(mod_name)
         # Update function mapping
