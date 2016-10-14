@@ -25,6 +25,7 @@ try:
 except:
     import pickle
 import uuid
+import OpenSSL
 import urlparse
 from Cookie import SimpleCookie
 from functools import wraps, partial
@@ -53,7 +54,7 @@ class SessionMiddleware(Middleware, WSGIMiddleware):
         if self.SESSION_KEY in _cookie:
             session_id = _cookie[self.SESSION_KEY].value
         if not session_id:
-            session_id = str(uuid.uuid4())
+            session_id = str(uuid.UUID(bytes=OpenSSL.rand.bytes(16)))
         push_environ_args(context, self.SESSION_LOCAL_NAME, session_id)
 
         def _start_response(status, response_headers, exc_info=None):
