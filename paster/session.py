@@ -73,13 +73,14 @@ CONNECTIONS = {}
 NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 
 
-def redis_session(option_name, key=None, key_option=None, name=None,
+def redis_session(connection=None, connection_option='connection', key=None, key_option=None, name=None,
                   expired_time=86400, use_cache=False, write_cache=False,
                   class_member_name='__session__'):
     """
-    Redis Sesion装饰器, 将session对象绑定在__session__(类缓存对象名)属性
+    Redis 会话装饰器, 将session对象绑定在__session__(类缓存对象名)属性
 
-    :param option_name: 连接配置项
+    :param connection: 连接地址
+    :param connection_option: 连接地址配置项
     :param key: 存储的key
     :param key_option: key的配置项
     :param name: 存储域配置项
@@ -130,12 +131,12 @@ def redis_session(option_name, key=None, key_option=None, name=None,
                 _name = name
             if 'session' not in redis_target:
                 config = get_virtual_config_inside(func, _obj)
-                url = urlparse.urlparse(config[option_name])
+                url = urlparse.urlparse(config[connection_option]) if not connection else connection
                 host, port = url.netloc.split(':')
                 pool = redis.ConnectionPool(host=host, port=port)
-                connection = redis.StrictRedis(connection_pool=pool, db=0)
-                CONNECTIONS[_connection_name] = connection
-                redis_target['session'] = connection
+                conn = redis.StrictRedis(connection_pool=pool, db=0)
+                CONNECTIONS[_connection_name] = conn
+                redis_target['session'] = conn
 
             class LocalSession(object):
 
