@@ -139,24 +139,24 @@ def redis_session(connection=None, connection_option='connection', key=None, key
                 redis_target['session'] = conn
 
             class LocalSession(object):
+                def __init__(self, n):
+                    self.name = n
 
-                @staticmethod
-                def clear():
+                def clear(self):
                     try:
-                        d = redis_target['session'].hgetall(_name)
-                        redis_target['session'].hdel(_name, *d.keys())
+                        d = redis_target['session'].hgetall(self.name)
+                        redis_target['session'].hdel(self.name, *d.keys())
                     except Exception as e:
                         logger.debug(SessionOperationError(e))
                         pass
 
-                @staticmethod
-                def get(item=None):
-                    logger.debug('get item {0} {1}'.format(_name, _key))
+                def get(self, item=None):
+                    logger.debug('get item {0} {1}'.format(self.name, _key))
                     if not item:
                         item = _key
                     try:
                         item = pickle.dumps(item)
-                        value = redis_target['session'].hget(_name, item)
+                        value = redis_target['session'].hget(self.name, item)
                         if value:
                             value = pickle.loads(value)
                         return value
@@ -164,9 +164,8 @@ def redis_session(connection=None, connection_option='connection', key=None, key
                         logger.debug(SessionOperationError(e))
                         pass
 
-                @staticmethod
-                def set(value=None, item=None):
-                    logger.debug('set item {0} {1}'.format(_name, _key))
+                def set(self, value=None, item=None):
+                    logger.debug('set item {0} {1}'.format(self.name, _key))
                     if not item:
                         item = _key
                     if value:
@@ -176,17 +175,17 @@ def redis_session(connection=None, connection_option='connection', key=None, key
                                 _value = pickle.dumps(value)
                             except:
                                 _value = pickle.dumps({})
-                            redis_target['session'].hset(_name, item, _value)
-                            redis_target['session'].expire(_name, expired_time)
+                            redis_target['session'].hset(self.name, item, _value)
+                            redis_target['session'].expire(self.name, expired_time)
                         except Exception as e:
                             logger.debug(SessionOperationError(e))
                             pass
 
             if not _obj:
                 # 如果不是对象, 通过设置将输出缓存
-                session = LocalSession()
+                session = LocalSession(_name)
             else:
-                setattr(_obj, class_member_name, LocalSession())
+                setattr(_obj, class_member_name, LocalSession(_name))
                 session = getattr(_obj, class_member_name)
             ret = None
 

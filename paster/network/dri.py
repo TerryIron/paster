@@ -25,16 +25,17 @@ try:
 except:
     import pickle
 
-from urlparse import urlparse, urlunparse
+import sqlalchemy.sql as sql
+from urlparse import urlparse
 from sqlalchemy import *
 from sqlalchemy.exc import *
-from sqlalchemy.orm import scoped_session
+from sqlalchemy.orm import scoped_session, Session
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.declarative import declarative_base as local_declarative_base
 
 
-__all__ = ['declarative_base', 'BaseModelDriver', 'make_connection', 'BaseBackend',
+__all__ = ['declarative_base', 'sql', 'and_', 'or_', 'BaseModelDriver', 'make_connection', 'BaseBackend',
            'StrColumn', 'IntColumn', 'MapColumn', 'DateTimeColumn']
 
 
@@ -50,7 +51,7 @@ class StrColumn(Column):
 
 class DateTimeColumn(Column):
     def __init__(self, **kwargs):
-        super(DateTimeColumn, self).__init__(DateTime)
+        super(DateTimeColumn, self).__init__(DateTime())
 
 
 # Don't use it in BaseMixin
@@ -72,13 +73,19 @@ class BaseMixin(object):
         return None if [setattr(cls, k, v) for k, v in dic_data.items() if
                         hasattr(cls, k) and getattr(cls, k, None) != v] else None
 
-    def update(cls, table_obj):
-        return cls._update_from_dict(table_obj.to_dict())
+    def update(cls, table_obj, list_name=None):
+        return cls._update_from_dict(table_obj.to_dict(list_name=list_name))
 
-    def to_dict(cls):
+    def to_dict(cls, list_name=None):
         d = pickle.loads(pickle.dumps(cls.__dict__))
         d.pop('_sa_instance_state')
-        return d
+        if list_name:
+            _d = {}
+            for n in list_name:
+                _d[n] = d[n]
+            return _d
+        else:
+            return d
 
 
 def declarative_base(cls=BaseMixin):
@@ -121,7 +128,9 @@ class BaseModelDriver(object):
 
     @property
     def session(self):
-        return self._session()
+        _session = self._session()
+        if isinstance(_session, Session):
+            return _session
 
     def getTable(self, name):
         try:
@@ -167,6 +176,13 @@ class BaseBackend(BaseModelDriver):
         table = table if table else self.__tableclass__
         self.clearTable(table)
 
+    def get_one(self, dict_data=None, table=None):
+        table = table if table else self.__tableclass__
+        if dict_data:
+            return self.session.query(table).filter_by(**dict_data).first()
+        else:
+            return self.session.query(table).filter_by().first()
+
     def get(self, dict_data=None, table=None):
         table = table if table else self.__tableclass__
         if dict_data:
@@ -177,25 +193,30 @@ class BaseBackend(BaseModelDriver):
     def update(self, data_set, new_data, table=None, limit=1000):
         table = table if table else self.__tableclass__
         data_set = data_set if isinstance(data_set, list) else [data_set]
+        session = self.session
         for i, data in enumerate(data_set[::limit]):
             data = data_set[i*limit:i*limit + limit]
             for d in data:
-                self.session.query(table).filter_by(**d).update(new_data)
+                session.query(table).filter_by(**d).update(new_data)
+        session.commit()
 
     def add(self, data_set, table=None, limit=1000):
         table = table if table else self.__tableclass__
         data_set = data_set if isinstance(data_set, list) else [data_set]
+        session = self.session
         for i, data in enumerate(data_set[::limit]):
             data = data_set[i*limit:i*limit + limit]
             for d in data:
                 record = table(**d)
-                self.session.add(record)
-            self.session.commit()
+                session.add(record)
+            session.commit()
 
     def delete(self, data_set, table=None, limit=1000):
         table = table if table else self.__tableclass__
         data_set = data_set if isinstance(data_set, list) else [data_set]
+        session = self.session
         for i, data in enumerate(data_set[::limit]):
             data = data_set[i*limit:i*limit + limit]
             for d in data:
-                self.session.query(table).filter_by(**d).delete()
+                session.query(table).filter_by(**d).delete()
+        session.commit()
