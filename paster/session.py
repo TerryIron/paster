@@ -25,6 +25,7 @@ try:
 except:
     import pickle
 import uuid
+import redis
 import OpenSSL
 import urlparse
 from Cookie import SimpleCookie
@@ -73,8 +74,63 @@ CONNECTIONS = {}
 NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 
 
-def redis_session(connection=None, connection_option='connection', key=None, key_option=None, name=None,
-                  expired_time=86400, use_cache=False, write_cache=False,
+class LocalSession(object):
+    def __init__(self, n, session_pool, default_key='', expired_time=3600):
+        self.name = n
+        self.session = session_pool
+        self._default_key = default_key
+        self.expired_time = expired_time
+
+    def clear(self):
+        try:
+            d = self.session.hgetall(self.name)
+            self.session.hdel(self.name, *d.keys())
+        except Exception as e:
+            logger.debug(SessionOperationError(e))
+            pass
+
+    def get(self, item=None):
+        logger.debug('get item {0} {1}'.format(self.name, self._default_key))
+        if not item:
+            item = self._default_key
+        try:
+            item = pickle.dumps(item)
+            value = self.session.hget(self.name, item)
+            if value:
+                value = pickle.loads(value)
+            return value
+        except Exception as e:
+            logger.debug(SessionOperationError(e))
+            pass
+
+    def set(self, value=None, item=None):
+        logger.debug('set item {0} {1}'.format(self.name, self._default_key))
+        if not item:
+            item = self._default_key
+        if value:
+            try:
+                item = pickle.dumps(item)
+                try:
+                    _value = pickle.dumps(value)
+                except:
+                    _value = pickle.dumps({})
+                self.session.hset(self.name, item, _value)
+                self.session.expire(self.name, self.expired_time)
+            except Exception as e:
+                logger.debug(SessionOperationError(e))
+                pass
+
+
+def make_session(conn, db=0):
+    url = urlparse.urlparse(conn)
+    host, port = url.netloc.split(':')
+    pool = redis.ConnectionPool(host=host, port=port)
+    return redis.StrictRedis(connection_pool=pool, db=db)
+
+
+def redis_session(connection=None, connection_option='connection', expired_time=86400,
+                  key=None, key_option=None, name=None,
+                  use_cache=False, write_cache=False,
                   class_member_name='__session__'):
     """
     Redis 会话装饰器, 将session对象绑定在__session__(类缓存对象名)属性
@@ -90,7 +146,6 @@ def redis_session(connection=None, connection_option='connection', key=None, key
     :param class_member_name: 类缓存对象名
     :return:
     """
-    import redis
 
     _connection_name = 'redis_session'
 
@@ -129,63 +184,23 @@ def redis_session(connection=None, connection_option='connection', key=None, key
                     _name = str(uuid.uuid5(NAMESPACE_DNS, str(_key)))
             else:
                 _name = name
+
+            # 初始化Session池
             if 'session' not in redis_target:
                 config = get_virtual_config_inside(func, _obj)
-                url = urlparse.urlparse(config[connection_option]) if not connection else connection
-                host, port = url.netloc.split(':')
-                pool = redis.ConnectionPool(host=host, port=port)
-                conn = redis.StrictRedis(connection_pool=pool, db=0)
+                _connection = config[connection_option] if not connection else connection
+                conn = make_session(_connection)
                 CONNECTIONS[_connection_name] = conn
                 redis_target['session'] = conn
 
-            class LocalSession(object):
-                def __init__(self, n):
-                    self.name = n
-
-                def clear(self):
-                    try:
-                        d = redis_target['session'].hgetall(self.name)
-                        redis_target['session'].hdel(self.name, *d.keys())
-                    except Exception as e:
-                        logger.debug(SessionOperationError(e))
-                        pass
-
-                def get(self, item=None):
-                    logger.debug('get item {0} {1}'.format(self.name, _key))
-                    if not item:
-                        item = _key
-                    try:
-                        item = pickle.dumps(item)
-                        value = redis_target['session'].hget(self.name, item)
-                        if value:
-                            value = pickle.loads(value)
-                        return value
-                    except Exception as e:
-                        logger.debug(SessionOperationError(e))
-                        pass
-
-                def set(self, value=None, item=None):
-                    logger.debug('set item {0} {1}'.format(self.name, _key))
-                    if not item:
-                        item = _key
-                    if value:
-                        try:
-                            item = pickle.dumps(item)
-                            try:
-                                _value = pickle.dumps(value)
-                            except:
-                                _value = pickle.dumps({})
-                            redis_target['session'].hset(self.name, item, _value)
-                            redis_target['session'].expire(self.name, expired_time)
-                        except Exception as e:
-                            logger.debug(SessionOperationError(e))
-                            pass
-
+            # 配置Session会话
             if not _obj:
                 # 如果不是对象, 通过设置将输出缓存
-                session = LocalSession(_name)
+                session = LocalSession(_name, redis_target['session'],
+                                       default_key=_key, expired_time=expired_time)
             else:
-                setattr(_obj, class_member_name, LocalSession(_name))
+                setattr(_obj, class_member_name, LocalSession(_name, redis_target['session'],
+                                                              default_key=_key, expired_time=expired_time))
                 session = getattr(_obj, class_member_name)
             ret = None
 
