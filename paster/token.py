@@ -27,7 +27,7 @@ import uuid
 from functools import wraps
 from oauthlib import oauth2
 
-from session import LocalSession, make_session
+from session import BaseSession, make_session
 from wsgi import get_virtual_config_inside, Middleware, WSGIMiddleware, \
     get_func_environ, push_environ_args, runner_return, get_self_object
 from utils import myException
@@ -145,7 +145,7 @@ class InValidToken(myException):
     error_code = 403
 
 
-class TokenSession(LocalSession):
+class TokenSession(BaseSession):
     def set(self, token_value, timestamp, item=None):
         _value = {'token': token_value, 'timestamp': timestamp}
         super(TokenSession, self).set(_value, item=item)
@@ -208,9 +208,9 @@ def token_session(keys, key_prefix=None, connection=None, connection_option='con
             _conn = make_session(_connection)
             _name = ''.join([key_prefix] + key_list)
             if _obj:
-                session = LocalSession(_name, _conn, expired_time=expired_time)
+                session = TokenSession(_name, _conn, expired_time=expired_time)
             else:
-                setattr(_obj, class_member_name, LocalSession(_name, _conn, expired_time=expired_time))
+                setattr(_obj, class_member_name, TokenSession(_name, _conn, expired_time=expired_time))
                 session = getattr(_obj, class_member_name)
 
             # 检查Token过期和验证通过
