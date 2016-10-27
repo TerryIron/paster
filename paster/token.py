@@ -23,7 +23,9 @@ __author__ = 'terry'
 import json
 import base64
 import time
+import uuid
 from functools import wraps
+from oauthlib import oauth2
 
 from session import LocalSession, make_session
 from wsgi import get_virtual_config_inside, Middleware, WSGIMiddleware, \
@@ -33,6 +35,88 @@ from log import get_logger
 
 
 logger = get_logger(__name__)
+
+
+TYPE_BEARER = 0
+TYPE_SAML = 1
+TYPE_MAC = 2
+
+
+TOKEN_TYPES = {
+    TYPE_BEARER: oauth2.BearerToken(),
+    TYPE_SAML: None,
+    TYPE_MAC: None,
+}
+
+
+class TokenScopeV1(object):
+    """
+        input_scope:
+        [被要求的检查的权限ID]
+
+    """
+
+    @classmethod
+    def get_input(cls, scope_obj):
+        return scope_obj['controller']
+
+    @classmethod
+    def put_input(cls, scope_obj, item):
+        scope_obj['controller'] = item
+
+
+def random_values():
+    return base64.b64encode(str(uuid.uuid4()))
+
+
+class AuthTokenV1(object):
+    @staticmethod
+    def generate_token(token_type=TYPE_BEARER, expires_in=3600, scopes=None):
+        t = None
+        if token_type in TOKEN_TYPES:
+            t = TOKEN_TYPES[token_type]
+        if not t:
+            t = TOKEN_TYPES[TYPE_BEARER]
+        token = t.create_token(type('request', (),
+                               {'expires_in': expires_in,
+                                'scopes': [],
+                                'state': 1,
+                                'extra_credentials': {'timestamp': time.time()}}), save_token=False)
+        scope_input_api = base64.b64encode(json.dumps(TokenScopeV1.get_input(scopes)))
+        scope_domain_val = random_values()
+        # Token随机值 +  Token域值 + 被允许的API表
+        token['access_token'] = ':'.join([token['access_token'], scope_domain_val, scope_input_api])
+        token['refresh_token'] = ':'.join([random_values(), random_values()])
+        token['scope'] = token['scope'].split()
+        return token
+
+    @staticmethod
+    def parse_token(token):
+        new_token = str(token).split(':')
+        if len(new_token) != 3:
+            return {}
+        else:
+            api_list = new_token[-1]
+            api_list = json.loads(base64.b64decode(api_list))
+            return {'api': api_list}
+
+    @staticmethod
+    def update_token(token, token_type=TYPE_BEARER, expires_in=3600, scopes=None):
+        token_scopes = AuthTokenV1.parse_token(token=token)
+        if token_scopes:
+            new_scopes = {}
+            TokenScopeV1.put_input(new_scopes, token_scopes['api'])
+            new_scopes.update(scopes)
+            new_token = AuthTokenV1.generate_token(token_type=token_type, expires_in=expires_in, scopes=new_scopes)
+            return new_token
+
+    @staticmethod
+    def diff_token(token, old_token):
+        _token = AuthTokenV1.parse_token(token=token)
+        _old_token = AuthTokenV1.parse_token(token=old_token)
+        if _token and _old_token:
+            if _token == _old_token:
+                return _old_token
 
 
 class TokenMiddleware(Middleware, WSGIMiddleware):
@@ -61,8 +145,15 @@ class InValidToken(myException):
     error_code = 403
 
 
+class TokenSession(LocalSession):
+    def set(self, token_value, timestamp, item=None):
+        _value = {'token': token_value, 'timestamp': timestamp}
+        super(TokenSession, self).set(_value, item=item)
+
+
 def token_session(keys, key_prefix=None, connection=None, connection_option='connection', expired_time=3600,
-                  check_headers=None, check_kwargs=None, class_member_name='__token__'):
+                  check_headers=None, check_kwargs=None, need_check=True, out_name=None,
+                  class_member_name='__token__'):
     """
     令牌会话装饰器
 
@@ -73,6 +164,8 @@ def token_session(keys, key_prefix=None, connection=None, connection_option='con
     :param expired_time: 存活时间
     :param check_headers: Token客户端消息检查头定义
     :param check_kwargs: Token客户端消息检查定义
+    :param need_check: 是否检查
+    :param out_name: 输出到变量
     :param class_member_name: 类缓存对象名
     :return:
     """
@@ -121,18 +214,19 @@ def token_session(keys, key_prefix=None, connection=None, connection_option='con
                 session = getattr(_obj, class_member_name)
 
             # 检查Token过期和验证通过
-            _save_token = session.get()
-            if _save_token != _token_info:
-                raise InValidToken()
-            else:
-                try:
-                    _token_scope = json.loads(base64.b64decode(_token_info.split(':')[2]))
-                    _token_time = _token_scope['timestamp']
-                    if time.time() - int(_token_time) < expired_time:
-                        raise ExpiredToken()
-                except:
-                    raise InValidToken()
-                ret = runner_return(func, *args, **kwargs)
-                return ret
+            if need_check:
+                _save_token = session.get()
+                _save_token = AuthTokenV1.diff_token(_token_info, _save_token)
+                if _save_token:
+                    try:
+                        _token_time = _save_token['timestamp']
+                        if time.time() - int(_token_time) < expired_time:
+                            raise ExpiredToken()
+                    except:
+                        raise InValidToken()
+            if out_name:
+                kwargs[out_name] = _token_info
+            ret = runner_return(func, *args, **kwargs)
+            return ret
         return _wrap_func
     return _wrap

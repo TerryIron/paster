@@ -74,7 +74,7 @@ CONNECTIONS = {}
 NAMESPACE_DNS = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 
 
-class LocalSession(object):
+class BaseSession(object):
     def __init__(self, n, session_pool, default_key='', expired_time=3600):
         self.name = n
         self.session = session_pool
@@ -103,22 +103,21 @@ class LocalSession(object):
             logger.debug(SessionOperationError(e))
             pass
 
-    def set(self, value=None, item=None):
+    def set(self, value, item=None):
         logger.debug('set item {0} {1}'.format(self.name, self._default_key))
         if not item:
             item = self._default_key
-        if value:
+        try:
+            item = pickle.dumps(item)
             try:
-                item = pickle.dumps(item)
-                try:
-                    _value = pickle.dumps(value)
-                except:
-                    _value = pickle.dumps({})
-                self.session.hset(self.name, item, _value)
-                self.session.expire(self.name, self.expired_time)
-            except Exception as e:
-                logger.debug(SessionOperationError(e))
-                pass
+                _value = pickle.dumps(value)
+            except:
+                _value = pickle.dumps({})
+            self.session.hset(self.name, item, _value)
+            self.session.expire(self.name, self.expired_time)
+        except Exception as e:
+            logger.debug(SessionOperationError(e))
+            pass
 
 
 def make_session(conn, db=0):
@@ -196,11 +195,11 @@ def redis_session(connection=None, connection_option='connection', expired_time=
             # 配置Session会话
             if not _obj:
                 # 如果不是对象, 通过设置将输出缓存
-                session = LocalSession(_name, redis_target['session'],
-                                       default_key=_key, expired_time=expired_time)
+                session = BaseSession(_name, redis_target['session'],
+                                      default_key=_key, expired_time=expired_time)
             else:
-                setattr(_obj, class_member_name, LocalSession(_name, redis_target['session'],
-                                                              default_key=_key, expired_time=expired_time))
+                setattr(_obj, class_member_name, BaseSession(_name, redis_target['session'],
+                                                             default_key=_key, expired_time=expired_time))
                 session = getattr(_obj, class_member_name)
             ret = None
 
