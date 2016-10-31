@@ -23,9 +23,12 @@ __author__ = 'terry'
 import re
 import json
 import inspect
+import os.path
 from io import BytesIO
 from functools import partial, wraps
 
+from deploy import loadapp
+from rpcmap import FILE_PATH, URL_PATH
 from utils import myException, as_config
 from log import get_logger
 
@@ -50,6 +53,22 @@ class BaseException(myException):
     pass
 
 
+def load_config(dict_obj, relative_to=''):
+    _config = {}
+    for k, v in dict_obj.items():
+        if v.startswith('config:'):
+            _v = v.split('config:')[1]
+            if _v.startswith('normal:'):
+                _path = _v.split('normal:')[1]
+                _config[k] = as_config(os.path.join(relative_to, _path))
+                setattr(_config[k], '__path__', os.path.join(relative_to, os.path.dirname(_path)))
+            else:
+                _config[k] = loadapp(v, relative_to=relative_to)
+        else:
+            _config[k] = v
+    return _config
+
+
 class WSGIMiddleware(object):
     middleware = {}
     app_name_re = re.compile('^(\[[^]]*\]).*')
@@ -57,17 +76,15 @@ class WSGIMiddleware(object):
     @classmethod
     def factory(cls, global_config, **local_config):
         sh = local_config.pop('shell') if 'shell' in local_config else None
-        global_config = as_config(global_config['__file__'])
-        _global_config = {}
-        for k, v in getattr(global_config, '_defaults', {}).items():
-            _global_config[k] = v
-        global_config = _global_config
-
-        _local_name = local_config['__path__']
+        here = os.path.dirname(global_config[FILE_PATH])
+        global_config = as_config(global_config[FILE_PATH])
+        _global_config = load_config(getattr(global_config, '_defaults', {}), here)
+        _local_name = local_config[URL_PATH]
         _local_app_name = cls.app_name_re.match(_local_name).groups()[0]
         if _local_name not in cls.middleware:
             cls.middleware[_local_name] = []
-        cls.middleware[_local_name].append((cls, global_config, local_config, sh))
+        _local_config = load_config(local_config, here)
+        cls.middleware[_local_name].append((cls, _global_config, _local_config, sh))
 
         def call_factory(context=None, start_response=None, app_name=None):
             return cls._factory(context, start_response, app_name=app_name)
@@ -379,10 +396,10 @@ class VirtualShell(object):
                 for _match, _api_args in _dict.items():
                     _map_dict[_match] = _api_args
 
-    def load_model(self, mod, config=None):
+    def load_model(self, mod, config=None, relative_to=''):
         mod_name = mod.func
         mod_name = '.'.join([mod_name.__module__, mod_name.__name__])
-        VirtualShell.config[mod_name] = config
+        VirtualShell.config[mod_name] = load_config(config, relative_to=os.path.dirname(relative_to))
 
         if mod_name not in self.objects:
             if inspect.isclass(mod.func):

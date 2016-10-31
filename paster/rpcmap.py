@@ -39,6 +39,10 @@ from utils import as_config, import_class
 from log import handler_init
 
 
+URL_PATH = '__url_path__'
+FILE_PATH = '__file__'
+
+
 def _load_factory(factory_line, global_conf, **local_conf):
     model, cls = factory_line.split(':')
     cls = cls.split('.')
@@ -74,12 +78,12 @@ def shell_factory(loader, global_conf, **local_conf):
     app_factory = local_conf.pop('paste.app_factory')
     shell_class = local_conf.pop('shell_class')
     shells = local_conf.pop('shell').split()
-    root_path = os.path.dirname(global_conf['__file__'])
+    root_path = os.path.dirname(global_conf[FILE_PATH])
     shell_class_kw = _get_shell_kwargs(local_conf)
     sh = import_class(shell_class)(**shell_class_kw)
     sh.load_root(root_path)
-    conf = as_config(global_conf['__file__'])
-    local_conf['__path__'] = global_conf.pop('__path__', '/')
+    conf = as_config(global_conf[FILE_PATH])
+    local_conf[URL_PATH] = global_conf.pop(URL_PATH, '/')
     for shell in shells:
         sh_conf = dict()
         for k, v in conf.items('shell:{0}'.format(shell)):
@@ -95,7 +99,7 @@ def shell_factory(loader, global_conf, **local_conf):
             model = loader.get_app(model, global_conf=global_conf)
             mod = import_class(model, root_path)
             mod = partial(mod, **model_kwargs)
-            sh.load_model(mod, config=mod_conf)
+            sh.load_model(mod, config=mod_conf, relative_to=global_conf[FILE_PATH])
     local_conf['shell'] = sh
     app = _load_factory(app_factory, global_conf, **local_conf)
     return app
@@ -126,7 +130,7 @@ def platform_factory(loader, global_conf, **local_conf):
 
 def filter_factory(global_conf, **local_conf):
     _filter_factory = local_conf.pop('paste.filter_factory')
-    local_conf['__path__'] = global_conf.pop('__path__', '/')
+    local_conf[URL_PATH] = global_conf.pop(URL_PATH, '/')
     _filter = _load_factory(_filter_factory, global_conf, **local_conf)
     return _filter
 
@@ -143,9 +147,9 @@ def rpcmap_factory(loader, global_conf, **local_conf):
     for rpc_line, app_name in local_conf.items():
         rpc_line = parse_rpcline_expression(rpc_line)
         _global_conf = copy.copy(global_conf)
-        if '__path__' not in _global_conf:
-            _global_conf['__path__'] = '[{0}]'.format(app_name)
-        _global_conf['__path__'] += rpc_line
+        if URL_PATH not in _global_conf:
+            _global_conf[URL_PATH] = '[{0}]'.format(app_name)
+        _global_conf[URL_PATH] += rpc_line
         app = loader.get_app(app_name, global_conf=_global_conf)
         rpcmap[rpc_line] = app
     return rpcmap

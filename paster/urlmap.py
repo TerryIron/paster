@@ -30,6 +30,7 @@ from zope.mimetype import typegetter
 from utils import myException
 from wsgi import NotFound
 from http import is_response_wrapper
+from rpcmap import URL_PATH
 from log import get_logger
 
 logger = get_logger(__name__)
@@ -46,9 +47,9 @@ def urlmap_factory(loader, global_conf, **local_conf):
     for path, app_name in local_conf.items():
         path = parse_path_expression(path)
         _global_conf = copy.copy(global_conf)
-        if '__path__' not in _global_conf:
-            _global_conf['__path__'] = '[{0}]'.format(app_name)
-        _global_conf['__path__'] += path
+        if URL_PATH not in _global_conf:
+            _global_conf[URL_PATH] = '[{0}]'.format(app_name)
+        _global_conf[URL_PATH] += path
         app = loader.get_app(app_name, global_conf=_global_conf)
         _map[path] = app
     return _map

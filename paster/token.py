@@ -58,7 +58,10 @@ class TokenScopeV1(object):
 
     @classmethod
     def get_input(cls, scope_obj):
-        return scope_obj['controller']
+        try:
+            return scope_obj.get('controller', {})
+        except:
+            return {}
 
     @classmethod
     def put_input(cls, scope_obj, item):
@@ -87,7 +90,8 @@ class AuthTokenV1(object):
         # Token随机值 +  Token域值 + 被允许的API表
         token['access_token'] = ':'.join([token['access_token'], scope_domain_val, scope_input_api])
         token['refresh_token'] = ':'.join([random_values(), random_values()])
-        token['scope'] = token['scope'].split()
+        if 'scope' in token:
+            token.pop('scope')
         return token
 
     @staticmethod
@@ -96,16 +100,16 @@ class AuthTokenV1(object):
         if len(new_token) != 3:
             return {}
         else:
-            api_list = new_token[-1]
-            api_list = json.loads(base64.b64decode(api_list))
-            return {'api': api_list}
+            _n = new_token[-1]
+            _n = json.loads(base64.b64decode(_n))
+            return {'env': _n}
 
     @staticmethod
     def update_token(token, token_type=TYPE_BEARER, expires_in=3600, scopes=None):
         token_scopes = AuthTokenV1.parse_token(token=token)
         if token_scopes:
             new_scopes = {}
-            TokenScopeV1.put_input(new_scopes, token_scopes['api'])
+            TokenScopeV1.put_input(new_scopes, token_scopes['env'])
             new_scopes.update(scopes)
             new_token = AuthTokenV1.generate_token(token_type=token_type, expires_in=expires_in, scopes=new_scopes)
             return new_token
