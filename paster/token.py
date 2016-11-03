@@ -138,15 +138,18 @@ class TokenMiddleware(Middleware, WSGIMiddleware):
 
 
 class AuthenticationFailed(myException):
-    error_code = 401
+    status_code = 401
+    error_code = 4001
 
 
 class ExpiredToken(myException):
-    error_code = 402
+    status_code = 401
+    error_code = 4002
 
 
 class InValidToken(myException):
-    error_code = 403
+    status_code = 401
+    error_code = 4003
 
 
 class TokenSession(BaseSession):

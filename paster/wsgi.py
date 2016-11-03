@@ -134,6 +134,30 @@ class Middleware(object):
             logger.debug(traceback.format_exc())
             return self.resposne_error(e, start_response)
 
+    def _get_request_info(self, context):
+        target_name = context.get('PATH_INFO', None)
+        method_name = context.get('REQUEST_METHOD', 'GET')
+        if target_name and method_name:
+            kwargs = context.get('REQUEST_KWARGS', {})
+            return target_name, method_name, kwargs
+        else:
+            raise BadRequest('Bad request for {0}:{1}'.format(target_name, method_name))
+
+    def filter_request(self, target_name, method, arg_list, context):
+        if not isinstance(method, list):
+            method = [method]
+        _target_name, _method_name, _kwargs = self._get_request_info(context)
+        if _target_name != target_name or _method_name not in method:
+            return None
+        else:
+            try:
+                _new = {}
+                for arg in arg_list:
+                    _new[arg] = _kwargs[arg]
+                return _new if _new else True
+            except:
+                return None
+
     def process_request(self, context, start_response):
         return context, start_response
 
@@ -164,73 +188,67 @@ class URLMiddleware(Middleware, WSGIMiddleware):
         if self.handler:
             if not hasattr(self.handler, 'run'):
                 raise NotFound('Resource Handler not found')
-            target_name = context.get('PATH_INFO', None)
-            method_name = context.get('REQUEST_METHOD', 'GET')
-            if target_name and method_name:
+            target_name, method_name, kwargs = self._get_request_info(context)
+            try:
+                request_body_size = int(context.get('CONTENT_LENGTH', 0))
+            except (ValueError, ):
+                request_body_size = 0
 
-                kwargs = context.get('REQUEST_KWARGS', {})
-                try:
-                    request_body_size = int(context.get('CONTENT_LENGTH', 0))
-                except (ValueError, ):
-                    request_body_size = 0
+            content_type = context.get('CONTENT_TYPE', 'application/x-www-form-urlencoded')
+            content_type = str(content_type).split()[0].strip(';')
+            _file = None
 
-                content_type = context.get('CONTENT_TYPE', 'application/x-www-form-urlencoded')
-                content_type = str(content_type).split()[0].strip(';')
-                _file = None
+            def process_request_body():
+                def text_plain_process(rbody):
+                    global _file
+                    _file = BytesIO(rbody)
 
-                def process_request_body():
-                    def text_plain_process(rbody):
-                        global _file
-                        _file = BytesIO(rbody)
+                def key_value_process(rbody):
+                    text_plain_process(rbody)
+                    try:
+                        _kwargs = json.loads(rbody)
+                        kwargs.update(_kwargs)
+                    except:
+                        pass
 
-                    def key_value_process(rbody):
-                        text_plain_process(rbody)
-                        try:
-                            _kwargs = json.loads(rbody)
-                            kwargs.update(_kwargs)
-                        except:
-                            pass
+                def form_data_process(rbody):
+                    text_plain_process(rbody)
 
-                    def form_data_process(rbody):
-                        text_plain_process(rbody)
+                _process = {
+                    'application/x-www-form-urlencoded': key_value_process,
+                    'multipart/form-data': form_data_process,
+                    'text/plain': text_plain_process,
+                }
 
-                    _process = {
-                        'application/x-www-form-urlencoded': key_value_process,
-                        'multipart/form-data': form_data_process,
-                        'text/plain': text_plain_process,
-                    }
+                if content_type in _process:
+                    request_body = context['wsgi.input'].read(request_body_size)
+                    if request_body:
+                        _process[content_type](request_body)
+            process_request_body()
 
-                    if content_type in _process:
-                        request_body = context['wsgi.input'].read(request_body_size)
-                        if request_body:
-                            _process[content_type](request_body)
-                process_request_body()
+            class HeaderDict(dict):
+                def __getitem__(self, item):
+                    super(HeaderDict, self).__getitem__(str(item).lower())
 
-                class HeaderDict(dict):
-                    def __getitem__(self, item):
-                        super(HeaderDict, self).__getitem__(str(item).lower())
+                def __setitem__(self, item, value):
+                    super(HeaderDict, self).__setitem__(str(item).lower(), value)
 
-                    def __setitem__(self, item, value):
-                        super(HeaderDict, self).__setitem__(str(item).lower(), value)
-
-                headers_env = HeaderDict()
-                for k in [key.split('HTTP_')[1] for key in context.keys() if key.startswith('HTTP_') and len(key) > 5]:
-                    headers_env[k] = context['HTTP_' + k]
-                push_environ_args(context,
-                                  URLMiddleware.METHOD_LOCAL_NAME,
-                                  dict(method=method_name,
-                                       file=_file,
-                                       headers=headers_env,
-                                       url=target_name))
-                func_env = context.get('paster.args', {})
-                cb = partial(self.handler.run,
-                             target_name,
-                             method_name,
-                             func_env,
-                             **kwargs)
-                context = cb()
-            else:
-                raise BadRequest('Bad request for {0}:{1}'.format(target_name, method_name))
+            headers_env = HeaderDict()
+            for k in [key.split('HTTP_')[1] for key in context.keys() if key.startswith('HTTP_') and len(key) > 5]:
+                headers_env[k] = context['HTTP_' + k]
+            push_environ_args(context,
+                              URLMiddleware.METHOD_LOCAL_NAME,
+                              dict(method=method_name,
+                                   file=_file,
+                                   headers=headers_env,
+                                   url=target_name))
+            func_env = context.get('paster.args', {})
+            cb = partial(self.handler.run,
+                         target_name,
+                         method_name,
+                         func_env,
+                         **kwargs)
+            context = cb()
         return super(URLMiddleware, self).process_request(context, start_response)
 
 
