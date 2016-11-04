@@ -21,7 +21,6 @@
 __author__ = 'terry'
 
 import re
-import json
 import inspect
 import os.path
 from io import BytesIO
@@ -30,6 +29,7 @@ from functools import partial, wraps
 from deploy import loadapp
 from rpcmap import FILE_PATH, URL_PATH
 from utils import myException, as_config
+from content import get_default_content_type, get_content_process
 from log import get_logger
 
 logger = get_logger(__name__)
@@ -189,12 +189,8 @@ class URLMiddleware(Middleware, WSGIMiddleware):
             if not hasattr(self.handler, 'run'):
                 raise NotFound('Resource Handler not found')
             target_name, method_name, kwargs = self._get_request_info(context)
-            try:
-                request_body_size = int(context.get('CONTENT_LENGTH', 0))
-            except (ValueError, ):
-                request_body_size = 0
 
-            content_type = context.get('CONTENT_TYPE', 'application/x-www-form-urlencoded')
+            content_type = context.get('CONTENT_TYPE', get_default_content_type())
             content_type = str(content_type).split()[0].strip(';')
             _file = None
 
@@ -203,28 +199,21 @@ class URLMiddleware(Middleware, WSGIMiddleware):
                     global _file
                     _file = BytesIO(rbody)
 
-                def key_value_process(rbody):
-                    text_plain_process(rbody)
-                    try:
-                        _kwargs = json.loads(rbody)
-                        kwargs.update(_kwargs)
-                    except:
-                        pass
+                request_body_size = int(context.get('CONTENT_LENGTH', 0))
+                request_body = context['wsgi.input'].read(request_body_size)
+                text_plain_process(request_body)
 
-                def form_data_process(rbody):
-                    text_plain_process(rbody)
+                def _process_request_body(url_kwargs):
+                    _content_process = get_content_process()
+                    if content_type in _content_process:
+                        if request_body:
+                            out_kwargs = _content_process[content_type](request_body)
+                            if isinstance(out_kwargs, dict):
+                                url_kwargs.update(out_kwargs)
+                        return url_kwargs
+                return _process_request_body
 
-                _process = {
-                    'application/x-www-form-urlencoded': key_value_process,
-                    'multipart/form-data': form_data_process,
-                    'text/plain': text_plain_process,
-                }
-
-                if content_type in _process:
-                    request_body = context['wsgi.input'].read(request_body_size)
-                    if request_body:
-                        _process[content_type](request_body)
-            process_request_body()
+            pro_method = process_request_body()
 
             class HeaderDict(dict):
                 def __getitem__(self, item):
@@ -245,9 +234,9 @@ class URLMiddleware(Middleware, WSGIMiddleware):
             func_env = context.get('paster.args', {})
             cb = partial(self.handler.run,
                          target_name,
-                         method_name,
+                         method_name + content_type,
                          func_env,
-                         **kwargs)
+                         partial(pro_method, kwargs))
             context = cb()
         return super(URLMiddleware, self).process_request(context, start_response)
 
@@ -265,21 +254,22 @@ def _get_route(key):
         return DEFAULT_ROUTES[key]
 
 
-def route(url, method='GET', class_member_name='__method__'):
+def route(url, method='GET', content_type=get_default_content_type(), class_member_name='__method__'):
     """
     路由装饰器, 将method对象绑定在__method__(类对象缓存名)属性
 
     :param url: url路径
     :param method: 请求方式
+    :param content_type: 类型
     :param class_member_name: 类对象缓存名
     :return:
     """
     url = str(url)
 
     if isinstance(method, list):
-        _packs = method
+        _packs = [m + content_type for m in method]
     else:
-        _packs = [method]
+        _packs = [method + content_type]
 
     if not url.startswith('^'):
         url = '^' + url
@@ -380,7 +370,7 @@ class VirtualShell(object):
         self.objects = {}
         self.mapping_api = {}
 
-    def run(self, name, method, env, **kwargs):
+    def run(self, name, method, env, kwargs_callback):
         if method not in self.mapping_api:
             raise NotFound()
         apis = self.mapping_api[method]
@@ -399,6 +389,7 @@ class VirtualShell(object):
 
             environ = {}
             environ.update(env)
+            kwargs = kwargs_callback()
 
             return meth(environ, **kwargs)
         else:
