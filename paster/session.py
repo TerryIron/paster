@@ -51,6 +51,11 @@ class SessionMiddleware(Middleware, WSGIMiddleware):
         _cookie = SimpleCookie()
         if 'HTTP_COOKIE' in context:
             _cookie.load(context['HTTP_COOKIE'])
+        _protocol = str(context.get('SERVER_PROTOCOL', 'HTTP/1.1'))
+        if _protocol.startswith('HTTPS'):
+            _is_secure = True
+        else:
+            _is_secure = False
         session_id = None
         if self.SESSION_KEY in _cookie:
             session_id = _cookie[self.SESSION_KEY].value
@@ -62,6 +67,9 @@ class SessionMiddleware(Middleware, WSGIMiddleware):
             cookie = SimpleCookie()
             cookie[self.SESSION_KEY] = session_id
             cookie[self.SESSION_KEY]['path'] = '/'
+            if _is_secure:
+                cookie[self.SESSION_KEY]['http'] = True
+                cookie[self.SESSION_KEY]['secure'] = True
             cookie_string = cookie[self.SESSION_KEY].OutputString()
             response_headers.append(('Set-Cookie', cookie_string))
             return start_response(status, response_headers, exc_info)
