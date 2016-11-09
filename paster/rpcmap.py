@@ -98,6 +98,7 @@ def shell_factory(loader, global_conf, **local_conf):
             mod = partial(mod, **model_kwargs)
             sh.load_model(mod, config=mod_conf, relative_to=global_conf[FILE_PATH])
     local_conf['shell'] = sh
+
     app = _load_factory(app_factory, global_conf, **local_conf)
     return app
 

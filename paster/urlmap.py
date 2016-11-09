@@ -50,8 +50,10 @@ def urlmap_factory(loader, global_conf, **local_conf):
         if URL_PATH not in _global_conf:
             _global_conf[URL_PATH] = '[{0}]'.format(app_name)
         _global_conf[URL_PATH] += path
-        app = loader.get_app(app_name, global_conf=_global_conf)
+        app, hooks = loader.get_app(app_name, global_conf=_global_conf)
         _map[path] = app
+        for hook in hooks:
+            _map.add_hook(hook)
     return _map
 
 
@@ -66,6 +68,19 @@ SUPPORTED_CONTENT_TYPES = [
 
 
 class URLMap(_URLMap):
+    def __init__(self, not_found_app=None):
+        self.hooks = set()
+        super(URLMap, self).__init__(not_found_app=not_found_app)
+
+    def add_hook(self, callback):
+        if callable(callback):
+            self.hooks.add(callback)
+
+    def init(self):
+        for hook in self.hooks:
+            if callable(hook):
+                hook()
+
     def _match(self, host, port, path_info):
         """Find longest match for a given URL path."""
         for (domain, app_url), app in self.applications:

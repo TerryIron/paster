@@ -56,7 +56,7 @@ class BaseException(myException):
 def load_config(dict_obj, relative_to=''):
     _config = {}
     for k, v in dict_obj.items():
-        if v.startswith('config:'):
+        if isinstance(v, str) and v.startswith('config:'):
             _v = v.split('config:')[1]
             if _v.startswith('normal:'):
                 _path = _v.split('normal:')[1]
@@ -71,6 +71,7 @@ def load_config(dict_obj, relative_to=''):
 
 class WSGIMiddleware(object):
     middleware = {}
+    hooks = {}
     app_name_re = re.compile('^(\[[^]]*\]).*')
 
     @classmethod
@@ -85,12 +86,18 @@ class WSGIMiddleware(object):
             cls.middleware[_local_name] = []
         _local_config = load_config(local_config, here)
         cls.middleware[_local_name].append((cls, _global_config, _local_config, sh))
+        if _local_app_name not in cls.hooks:
+            cls.hooks[_local_app_name] = set()
+        if sh:
+            for hook in getattr(sh, 'hooks', []):
+                if callable(hook):
+                    cls.hooks[_local_app_name].add(hook)
 
         def call_factory(context=None, start_response=None, app_name=None):
             return cls._factory(context, start_response, app_name=app_name)
 
         call_factory_wrap = partial(call_factory, app_name=_local_app_name)
-        return call_factory_wrap
+        return call_factory_wrap, cls.hooks[_local_app_name]
 
     @classmethod
     def _factory(cls, context, start_response=None, app_name=None):
@@ -367,7 +374,7 @@ class VirtualShell(object):
     root_path = None
 
     def __init__(self):
-        self.objects = {}
+        self.hook_objects = {}
         self.mapping_api = {}
 
     def run(self, name, method, env, kwargs_callback):
@@ -382,9 +389,9 @@ class VirtualShell(object):
         if selected_name:
             mod_name, func_name = apis[selected_name]
             if not mod_name:
-                meth = self.objects[func_name]
+                meth = self.hook_objects[func_name]
             else:
-                obj = self.objects[mod_name]
+                obj = self.hook_objects[mod_name]
                 meth = getattr(obj, func_name)
 
             environ = {}
@@ -410,16 +417,20 @@ class VirtualShell(object):
         mod_name = '.'.join([mod_name.__module__, mod_name.__name__])
         VirtualShell.config[mod_name] = load_config(config, relative_to=os.path.dirname(relative_to))
 
-        if mod_name not in self.objects:
+        if mod_name not in self.hook_objects:
             if inspect.isclass(mod.func):
-                self.objects[mod_name] = mod()
+                self.hook_objects[mod_name] = mod()
             else:
-                self.objects[mod_name] = mod
+                self.hook_objects[mod_name] = mod
 
         # Update object-function mapping
         self._update_mapping(mod_name)
         # Update function mapping
         self._update_mapping(None)
+
+    @property
+    def hooks(self):
+        return self.hook_objects.values()
 
     @staticmethod
     def load_root(root_path):
