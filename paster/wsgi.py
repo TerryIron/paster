@@ -17,9 +17,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-
-__author__ = 'terry'
-
 import re
 import inspect
 import os.path
@@ -31,6 +28,9 @@ from rpcmap import FILE_PATH, URL_PATH
 from utils import myException, as_config
 from content import get_default_content_type, get_content_process
 from log import get_logger
+
+__author__ = 'terry'
+
 
 logger = get_logger(__name__)
 

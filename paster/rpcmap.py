@@ -17,9 +17,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-
-__author__ = 'terry'
-
 import os
 import cgi
 import copy
@@ -38,6 +35,7 @@ import rpcexceptions
 from utils import as_config, import_class
 from log import handler_init
 
+__author__ = 'terry'
 
 URL_PATH = '__url_path__'
 FILE_PATH = '__file__'
@@ -46,8 +44,10 @@ FILE_PATH = '__file__'
 def _load_factory(factory_line, global_conf, **local_conf):
     model, cls = factory_line.split(':')
     cls = cls.split('.')
-    if len(cls) > 1: func = cls[1]
-    else: func = 'factory'
+    if len(cls) > 1:
+        func = cls[1]
+    else:
+        func = 'factory'
     model = '.'.join([model, cls[0]])
     middleware = import_class(model)
     func = getattr(middleware, func)
@@ -72,9 +72,6 @@ def _get_model_kwargs(local_conf):
 
 
 def shell_factory(loader, global_conf, **local_conf):
-    assert 'paste.app_factory' in local_conf, 'please install model config as paste.app_factory=x'
-    assert 'shell_class' in local_conf, 'please install model config as shell_class=x'
-    assert 'shell' in local_conf, 'please install model config as shell=x'
     app_factory = local_conf.pop('paste.app_factory')
     shell_class = local_conf.pop('shell_class')
     shells = local_conf.pop('shell').split()
@@ -105,26 +102,25 @@ def shell_factory(loader, global_conf, **local_conf):
     return app
 
 
+def service_factory(loader, global_conf, **local_conf):
+    _address = local_conf.pop('address', '127.0.0.1')
+    _port = local_conf.pop('listen', '8000')
+    local_conf['address'] = _address
+    local_conf['port'] = _port
+    for pf in local_conf['entry'].split()[-1:]:
+        app = loader.get_app(pf, global_conf=global_conf)
+        return app, local_conf
+
+
 def platform_factory(loader, global_conf, **local_conf):
-    assert 'platform' in local_conf, 'please install platform config as platform=x'
     _log_format = global_conf.get('log_format', None)
     _log_level = global_conf.get('log_level', None)
     _log_path = global_conf.get('log_path', None)
     handler_init(_log_path, _log_level, _log_format)
     platform = {}
-    platform_address = local_conf.get('platform_address', '127.0.0.1')
-    for i, pf in enumerate(local_conf['platform'].split()):
+    for pf in local_conf['start'].split():
         app = loader.get_app(pf, global_conf=global_conf)
-        try:
-            _key = local_conf['platform_listen'].split()[i]
-            _key = _key.split(':')
-            if len(_key) > 1:
-                _key = (_key[0], int(_key[1]))
-            else:
-                _key = (platform_address, int(_key[0]))
-        except:
-            _key = (platform_address, 8000)
-        platform[_key] = app
+        platform[pf] = app
     return platform
 
 

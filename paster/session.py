@@ -17,9 +17,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-
-__author__ = 'terry'
-
 try:
     import cPickle as pickle
 except:
@@ -35,6 +32,9 @@ from wsgi import get_virtual_config_inside, Middleware, WSGIMiddleware, \
     get_func_environ, push_environ_args, runner_return, get_self_object
 from utils import myException
 from log import get_logger
+
+__author__ = 'terry'
+
 
 logger = get_logger(__name__)
 

@@ -80,7 +80,7 @@ class RPCException(Exception):
             self.detail = detail
         if comment is not None:
             self.comment = comment
-        Exception.__init__(self,"%s %s\n%s\n%s\n" % (
+        Exception.__init__(self, "%s %s\n%s\n%s\n" % (
             self.code, self.title, self.explanation, self.detail))
 
     def wsgi_application(self, environ, start_response=None, exc_info=None):
@@ -134,5 +134,6 @@ class RPCClientError(RPCError):
 
 class RPCNotFound(RPCError):
     code = 404
-    title = 'Not Found'                                                                                                                                        
-    explanation = ('The resource could not be found.\r\n')
+    title = 'Not Found'
+    explanation = ('The resource could '
+                   'not be found.\r\n')

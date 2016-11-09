@@ -17,14 +17,12 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-
-__author__ = 'terry'
-
-
 import sys
 import ctypes
 import ctypes.util
 from datetime import date, datetime
+
+__author__ = 'terry'
 
 
 if sys.platform.startswith('linux'):
@@ -34,9 +32,7 @@ if sys.platform.startswith('linux'):
 else:
     CLOCK_MONOTONIC_RAW = 0
     librt = ctypes.CDLL(ctypes.util.find_library("bios"), mode=ctypes.RTLD_GLOBAL)
-    print librt
     clock_gettime = librt.biostime
-    print clock_gettime
 
 
 class TimeSpec(ctypes.Structure):
@@ -53,6 +49,3 @@ def hwclock():
         return date.fromtimestamp(t.tv_sec)
     else:
         return datetime.now()
-
-
-print hwclock()

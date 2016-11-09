@@ -17,9 +17,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-
-__author__ = 'terry'
-
 import json
 import werkzeug.http
 import urlparse
@@ -32,6 +29,9 @@ from wsgi import NotFound
 from http import is_response_wrapper
 from rpcmap import URL_PATH
 from log import get_logger
+
+__author__ = 'terry'
+
 
 logger = get_logger(__name__)
 
@@ -71,8 +71,7 @@ class URLMap(_URLMap):
         for (domain, app_url), app in self.applications:
             if domain and domain != host and domain != host + ':' + port:
                 continue
-            if (path_info == app_url
-                or path_info.startswith(app_url + '/')):
+            if path_info == app_url or path_info.startswith(app_url + '/'):
                 return app, app_url
 
         return None, None

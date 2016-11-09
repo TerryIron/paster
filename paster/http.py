@@ -17,12 +17,10 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-
-__author__ = 'terry'
-
-
 import os.path
 from zope.mimetype import typegetter
+
+__author__ = 'terry'
 
 
 def is_response_wrapper(obj):
@@ -36,6 +34,7 @@ def check_mime_type(filename):
     _filename = os.path.basename(filename)
     content_type = typegetter.mimeTypeGuesser(name=_filename)
     return content_type
+
 
 class BaseResponse(object):
     def __init__(self, content=None, headers=None, status_code=200):
@@ -85,4 +84,3 @@ class HttpDownload(BaseResponse):
 
 class HttpRender(BaseResponse):
     pass
-

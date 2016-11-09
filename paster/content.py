@@ -17,11 +17,9 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
+import json
 
 __author__ = 'terry'
-
-
-import json
 
 
 CONTENT_TYPE_X_WWW_FORM_URLENCODED = 'application/x-www-form-urlencoded'
@@ -48,10 +46,8 @@ def content_process_form_urlencoded(body):
 CONTENT_PROCESS[CONTENT_TYPE_X_WWW_FORM_URLENCODED] = content_process_form_urlencoded
 
 
-
 def content_process_multi_form_data(body):
     pass
 
 
 CONTENT_PROCESS[CONTENT_TYPE_MULTI_FORM_DATA] = content_process_multi_form_data
-
