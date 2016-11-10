@@ -380,20 +380,13 @@ class VirtualShell(object):
     def run(self, name, method, env, kwargs_callback):
         if method not in self.mapping_api:
             raise NotFound()
-        apis = self.mapping_api[method]
-        selected_name = None
-        for k in apis.keys():
+        apis, meth = self.mapping_api[method], None
+        for k, m in apis:
+            mod, func = m
             if k.match(name):
-                selected_name = k
+                meth = self._get_method(mod, func)
                 break
-        if selected_name:
-            mod_name, func_name = apis[selected_name]
-            if not mod_name:
-                meth = self.hook_objects[func_name]
-            else:
-                obj = self.hook_objects[mod_name]
-                meth = getattr(obj, func_name)
-
+        if meth:
             environ = {}
             environ.update(env)
             kwargs = kwargs_callback()
@@ -402,15 +395,23 @@ class VirtualShell(object):
         else:
             raise NotFound()
 
+    def _get_method(self, mod_name, func_name):
+        if not mod_name:
+            _meth = self.hook_objects[func_name]
+        else:
+            obj = self.hook_objects[mod_name]
+            _meth = getattr(obj, func_name)
+        return _meth
+
     def _update_mapping(self, name):
         _conf = _get_route(name)
         if _conf:
             for _method, _dict in _conf.items():
                 if _method not in self.mapping_api:
-                    self.mapping_api[_method] = _dict
+                    self.mapping_api[_method] = []
                 _map_dict = self.mapping_api[_method]
                 for _match, _api_args in _dict.items():
-                    _map_dict[_match] = _api_args
+                    _map_dict.append((_match, _api_args))
 
     def load_model(self, mod, config=None, relative_to=''):
         mod_name = mod.func
