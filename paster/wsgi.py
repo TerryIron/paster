@@ -60,8 +60,16 @@ def load_config(dict_obj, relative_to=''):
             _v = v.split('config:')[1]
             if _v.startswith('normal:'):
                 _path = _v.split('normal:')[1]
-                _config[k] = as_config(os.path.join(relative_to, _path))
-                setattr(_config[k], '__path__', os.path.join(relative_to, os.path.dirname(_path)))
+                try:
+                    _path, sect = _path.split(':')
+                    _obj = as_config(os.path.join(relative_to, _path))
+                    if sect.lower() == 'default':
+                        _config[k] = _obj.defaults().get(k, '')
+                    else:
+                        _config[k] = _obj.get(sect, k) if _obj.has_option(sect, k) else ''
+                except:
+                    _config[k] = as_config(os.path.join(relative_to, _path))
+                    setattr(_config[k], '__path__', os.path.join(relative_to, os.path.dirname(_path)))
             else:
                 _config[k] = loadapp(v, relative_to=relative_to)
         else:
@@ -416,7 +424,8 @@ class VirtualShell(object):
     def load_model(self, mod, config=None, relative_to=''):
         mod_name = mod.func
         mod_name = '.'.join([mod_name.__module__, mod_name.__name__])
-        VirtualShell.config[mod_name] = load_config(config, relative_to=os.path.dirname(relative_to))
+        relative_dir = os.path.dirname(relative_to)
+        VirtualShell.config[mod_name] = load_config(config, relative_to=relative_dir)
 
         if mod_name not in self.hook_objects:
             if inspect.isclass(mod.func):
