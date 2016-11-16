@@ -3,7 +3,7 @@
 import sys
 import os.path
 
-from paster.dev.vshell import VShell
+from utils.vshell import VShell
 from paster.deploy import loadapp
 from paster.log import get_logger
 
@@ -53,6 +53,7 @@ def get_app(app_name):
     app = loadapp('config:setting.ini', sys.platform, relative_to=root)
     for name, (_app, _conf) in app.items():
         if name == app_name:
+            _app.init()
             return _app
 
 application = get_app('{service_name}')
