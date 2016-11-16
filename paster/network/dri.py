@@ -67,7 +67,7 @@ class BaseMixin(object):
         return cls.__name__.lower()
 
     __table_args__ = {'mysql_engine': 'InnoDB',
-                      'mysql_charset': 'utf-8',
+                      'mysql_charset': 'utf8',
                       }
 
     id = IntColumn(primary_key=True)
