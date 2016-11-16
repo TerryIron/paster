@@ -17,6 +17,7 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
+from datetime import datetime
 
 __author__ = 'terry'
 
@@ -40,18 +41,18 @@ __all__ = ['declarative_base', 'sql', 'and_', 'or_', 'BaseModelDriver', 'make_co
 
 
 class IntColumn(Column):
-    def __init__(self, primary_key=False, **kwargs):
-        super(IntColumn, self).__init__(Integer, primary_key=primary_key)
+    def __init__(self, primary_key=False, default=None, **kwargs):
+        super(IntColumn, self).__init__(Integer, primary_key=primary_key, default=default)
 
 
 class StrColumn(Column):
-    def __init__(self, length, **kwargs):
-        super(StrColumn, self).__init__(String(length))
+    def __init__(self, length, default=None, **kwargs):
+        super(StrColumn, self).__init__(String(length), default=default)
 
 
 class DateTimeColumn(Column):
-    def __init__(self, **kwargs):
-        super(DateTimeColumn, self).__init__(DateTime())
+    def __init__(self, default=None, **kwargs):
+        super(DateTimeColumn, self).__init__(DateTime, default=default)
 
 
 # Don't use it in BaseMixin
