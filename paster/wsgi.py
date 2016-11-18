@@ -337,7 +337,10 @@ def get_virtual_config_inside(func, class_object=None):
     else:
         _name = '.'.join([func.__module__, func.__name__])
 
-    return VirtualShell.config.get(_name, {})
+    if _name in VirtualShell.config:
+        return VirtualShell.config.get(_name, {})
+    else:
+        return VirtualShell.config.get('__default__', {})
 
 
 def get_virtual_config(class_object=None):
@@ -351,7 +354,10 @@ def get_virtual_config(class_object=None):
             _pack = _pack[1].strip('/').strip('.py').strip('\\').replace('/', '.').replace('\\', '.')
         _name = '.'.join([_pack, _name])
 
-    return VirtualShell.config.get(_name, {})
+    if _name in VirtualShell.config:
+        return VirtualShell.config.get(_name, {})
+    else:
+        return VirtualShell.config.get('__default__', {})
 
 
 def get_func_environ(d, item):
@@ -421,11 +427,13 @@ class VirtualShell(object):
                 for _match, _api_args in _dict.items():
                     _map_dict.append((_match, _api_args))
 
-    def load_model(self, mod, config=None, relative_to=''):
+    def load_model(self, mod, global_conf=None, local_conf=None, relative_to=''):
         mod_name = mod.func
         mod_name = '.'.join([mod_name.__module__, mod_name.__name__])
         relative_dir = os.path.dirname(relative_to)
-        VirtualShell.config[mod_name] = load_config(config, relative_to=relative_dir)
+        if '__default__' not in VirtualShell.config:
+            VirtualShell.config['__default__'] = load_config(global_conf, relative_to=relative_dir)
+        VirtualShell.config[mod_name] = load_config(local_conf, relative_to=relative_dir)
 
         if mod_name not in self.hook_objects:
             if inspect.isclass(mod.func):

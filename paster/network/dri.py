@@ -36,7 +36,7 @@ from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.declarative import declarative_base as local_declarative_base
 
 
-__all__ = ['declarative_base', 'sql', 'and_', 'or_', 'BaseModelDriver', 'make_connection', 'BaseBackend',
+__all__ = ['declarative_base', 'sql', 'and_', 'or_', 'join', 'BaseModelDriver', 'make_connection', 'BaseBackend',
            'StrColumn', 'IntColumn', 'MapColumn', 'DateTimeColumn']
 
 
@@ -133,6 +133,7 @@ class BaseModelDriver(object):
     def session(self):
         _session = self._session()
         if isinstance(_session, Session):
+            _session.commit()
             return _session
 
     def getTable(self, name):
@@ -184,14 +185,14 @@ class BaseBackend(BaseModelDriver):
         if dict_data:
             return self.session.query(table).filter_by(**dict_data).first()
         else:
-            return self.session.query(table).filter_by().first()
+            return self.session.query(table).first()
 
     def get(self, dict_data=None, table=None):
         table = table if table else self.__tableclass__
         if dict_data:
             return self.session.query(table).filter_by(**dict_data).all()
         else:
-            return self.session.query(table).filter_by().all()
+            return self.session.query(table).all()
 
     def update(self, data_set, new_data, table=None, limit=1000):
         table = table if table else self.__tableclass__
