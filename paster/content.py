@@ -24,6 +24,7 @@ __author__ = 'terry'
 
 CONTENT_TYPE_X_WWW_FORM_URLENCODED = 'application/x-www-form-urlencoded'
 CONTENT_TYPE_MULTI_FORM_DATA = 'multipart/form-data'
+CONTENT_TYPE_JSON = 'application/json'
 CONTENT_TYPE_PLAIN = 'text/plain'
 
 CONTENT_PROCESS = {}
@@ -44,6 +45,7 @@ def content_process_form_urlencoded(body):
         return {}
 
 CONTENT_PROCESS[CONTENT_TYPE_X_WWW_FORM_URLENCODED] = content_process_form_urlencoded
+CONTENT_PROCESS[CONTENT_TYPE_JSON] = content_process_form_urlencoded
 
 
 def content_process_multi_form_data(body):

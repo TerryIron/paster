@@ -220,6 +220,8 @@ class URLMiddleware(Middleware, WSGIMiddleware):
 
                 def _process_request_body(url_kwargs):
                     _content_process = get_content_process()
+                    logger.debug(_content_process)
+                    logger.debug(content_type)
                     if content_type in _content_process:
                         if request_body:
                             out_kwargs = _content_process[content_type](request_body)
