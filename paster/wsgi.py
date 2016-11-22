@@ -146,7 +146,7 @@ class Middleware(object):
             return self.resposne_normal(_context, _start_response)
         except Exception as e:
             import traceback
-            logger.debug(traceback.format_exc())
+            logger.error(traceback.format_exc())
             return self.resposne_error(e, start_response)
 
     def _get_request_info(self, context):
@@ -159,19 +159,16 @@ class Middleware(object):
             raise BadRequest('Bad request for {0}:{1}'.format(target_name, method_name))
 
     def filter_request(self, target_name, method, arg_list, context):
-        if not isinstance(method, list):
-            method = [method]
+        method = [method] if not isinstance(method, list) else method
         _target_name, _method_name, _kwargs = self._get_request_info(context)
-        if _target_name != target_name or _method_name not in method:
-            return None
-        else:
-            try:
-                _new = {}
-                for arg in arg_list:
-                    _new[arg] = _kwargs[arg]
-                return _new if _new else True
-            except:
-                return None
+        if not (_target_name == target_name and _method_name in method):
+            return False, None
+        _new = {}
+        try:
+            for arg in arg_list:
+                _new[arg] = _kwargs[arg]
+        finally:
+            return True, _new
 
     def process_request(self, context, start_response):
         return context, start_response
@@ -194,6 +191,17 @@ def pop_environ_args(environ, item):
     if 'paster.args' not in environ:
         return ''
     return environ['paster.args'].pop(item, None)
+
+
+class FunctionEnviron(object):
+    def __init__(self, env):
+        self.env = env if isinstance(env, dict) else {}
+
+    def get(self, item, default=None):
+        if item in self.env:
+            return self.env[item]
+        else:
+            return {} if not default else default
 
 
 class URLMiddleware(Middleware, WSGIMiddleware):
@@ -220,7 +228,7 @@ class URLMiddleware(Middleware, WSGIMiddleware):
 
                 def _process_request_body(url_kwargs):
                     _content_process = get_content_process()
-                    logger.debug(_content_process)
+                    # logger.debug(_content_process)
                     logger.debug(content_type)
                     if content_type in _content_process:
                         if request_body:
@@ -252,7 +260,7 @@ class URLMiddleware(Middleware, WSGIMiddleware):
             cb = partial(self.handler.run,
                          target_name,
                          method_name + content_type,
-                         func_env,
+                         FunctionEnviron(func_env),
                          partial(pro_method, kwargs))
             context = cb()
         return super(URLMiddleware, self).process_request(context, start_response)
@@ -365,16 +373,16 @@ def get_virtual_config(class_object=None):
 def get_func_environ(d, item):
     if d:
         env = d[-1]
-        return env.get(item, {}) if isinstance(env, dict) else {}
+        return env.get(item, {}) if isinstance(env, FunctionEnviron) else {}
     else:
         return {}
 
 
 def ignore_function_environ(d):
     if len(d) > 1:
-        val = tuple(d[:-1]) if isinstance(d[-1], dict) else tuple(d[:])
+        val = tuple(d[:-1]) if isinstance(d[-1], FunctionEnviron) else tuple(d[:])
     else:
-        val = () if not d or isinstance(d[0], dict) else (d[0], )
+        val = () if not d or isinstance(d[0], FunctionEnviron) else (d[0], )
     return val
 
 
@@ -396,18 +404,16 @@ class VirtualShell(object):
     def run(self, name, method, env, kwargs_callback):
         if method not in self.mapping_api:
             raise NotFound()
-        apis, meth = self.mapping_api[method], None
-        for k, m in apis:
+        _apis, _meth = self.mapping_api[method], None
+        for k, m in _apis:
             mod, func = m
             if k.match(name):
-                meth = self._get_method(mod, func)
+                _meth = self._get_method(mod, func)
                 break
-        if meth:
-            environ = {}
-            environ.update(env)
+        if _meth:
             kwargs = kwargs_callback()
 
-            return meth(environ, **kwargs)
+            return _meth(env, **kwargs)
         else:
             raise NotFound()
 

@@ -194,33 +194,36 @@ class BaseBackend(BaseModelDriver):
         else:
             return self.session.query(table).all()
 
-    def update(self, data_set, new_data, table=None, limit=1000):
+    def update(self, data_set, new_data, table=None, limit=1000, session=None):
         table = table if table else self.__tableclass__
         data_set = data_set if isinstance(data_set, list) else [data_set]
-        session = self.session
+        _session = self.session if not session else session
         for i, data in enumerate(data_set[::limit]):
             data = data_set[i*limit:i*limit + limit]
             for d in data:
-                session.query(table).filter_by(**d).update(new_data)
-        session.commit()
+                _session.query(table).filter_by(**d).update(new_data)
+        if not session:
+            _session.commit()
 
-    def add(self, data_set, table=None, limit=1000):
+    def add(self, data_set, table=None, limit=1000, session=None):
         table = table if table else self.__tableclass__
         data_set = data_set if isinstance(data_set, list) else [data_set]
-        session = self.session
+        _session = self.session if not session else session
         for i, data in enumerate(data_set[::limit]):
             data = data_set[i*limit:i*limit + limit]
             for d in data:
                 record = table(**d)
-                session.add(record)
-            session.commit()
+                _session.add(record)
+            if not session:
+                _session.commit()
 
-    def delete(self, data_set, table=None, limit=1000):
+    def delete(self, data_set, table=None, limit=1000, session=None):
         table = table if table else self.__tableclass__
         data_set = data_set if isinstance(data_set, list) else [data_set]
-        session = self.session
+        _session = self.session if not session else session
         for i, data in enumerate(data_set[::limit]):
             data = data_set[i*limit:i*limit + limit]
             for d in data:
-                session.query(table).filter_by(**d).delete()
-        session.commit()
+                _session.query(table).filter_by(**d).delete()
+            if not session:
+                _session.commit()

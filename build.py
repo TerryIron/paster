@@ -24,13 +24,13 @@ import commands
 import os
 import os.path
 
-from paster.dev.vshell import VShell
+from utils.vshell import VShell
 
 
 class Shell(VShell):
     def prepare(self):
         command = self.command('all', help_text=u'生成环境')
-        command.install_argument(['-i', '--ignore'], 'ignore_dir', default=[], help_text=u'可以忽略的目录')
+        command.install_argument(['-i', '--ignore'], 'ignore_dir', default=['env'], help_text=u'可以忽略的目录')
         command.install_argument(['-t', '--topdir-packname'], 'top_dir', default='__top__',
                                  help_text=u'设置根目录')
         command = self.command('clean', help_text=u'释放环境')
@@ -40,7 +40,7 @@ class Shell(VShell):
     def run(self):
         git_dir = ['.git']
         front_dir = ['static', 'templates']
-        default_dir = ['paster', 'utils']
+        default_dir = ['paster']
         if self.has_command('all'):
             _ignore = self.get_argument('ignore_dir')
             _topname = self.get_argument('top_dir')
@@ -68,22 +68,25 @@ import sys
 import os.path
 
 top_dir = os.path.join(os.path.dirname(__file__), '{0}')
-sys.path.insert(0, top_dir)
+abs_dir = os.path.abspath(top_dir)
+if abs_dir not in sys.path:
+    sys.path.insert(0, top_dir)
 """.format(topdir)
                         f.write(temp)
 
             for d in [i for i in commands.getoutput('find . -type d  | grep -v "{0}"'.format(ignore_str)).split()
                       if check(i)]:
                 _dir_path = '/'.join(['..' for i in d.split('/') if i != '.'])
-                if _dir_path:
+                if _dir_path and os.path.exists(os.path.join(d, '__init__.py')):
                     file_name = os.path.join(d, _topname + '.py')
                     tempfile(file_name, _dir_path)
         if self.has_command('clean'):
             ignore_dir = git_dir + front_dir + default_dir
-            grep_dir = ['paster', 'utils']
+            _topname = self.get_argument('top_dir')
+            grep_dir = ['paster']
             grep_str = '\|'.join(grep_dir)
-            for d in commands.getoutput('find . -type l -d 2 | grep "{0}"'.format(grep_str)).split():
-                commands.getoutput('rm {0}'.format(d))
+            for d in commands.getoutput('find . -type f | grep -v "{0}" | grep "{1}.py"'.format(grep_str, _topname)).split():
+                commands.getoutput('rm -f {0}'.format(d))
 
 
 if __name__ == '__main__':

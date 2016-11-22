@@ -209,8 +209,8 @@ def redis_session(connection=None, connection_option='connection', expired_time=
                 setattr(_obj, class_member_name, BaseSession(_name, redis_target['session'],
                                                              default_key=_key, expired_time=expired_time))
                 session = getattr(_obj, class_member_name)
-            ret = None
 
+            ret = None
             if use_cache and _key:
                 ret = session.get(_key)
             if not ret:

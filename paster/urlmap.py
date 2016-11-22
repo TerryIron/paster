@@ -262,6 +262,6 @@ class URLMap(_URLMap):
                 result_response(_get_status_code(result), list(_header), )
 
                 _verify_content(result)
-                return json.dumps(result.content, ensure_ascii=False)
+                return json.dumps(result.content)
 
         return self.not_found(environ, start_response)
