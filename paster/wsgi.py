@@ -163,6 +163,17 @@ class Middleware(object):
         _target_name, _method_name, _kwargs = self._get_request_info(context)
         if not (_target_name == target_name and _method_name in method):
             return False, None
+
+        content_type = context.get('CONTENT_TYPE', get_default_content_type())
+        content_type = str(content_type).split()[0].strip(';')
+        request_body_size = int(context.get('CONTENT_LENGTH', 0))
+        request_body = context['wsgi.input'].read(request_body_size)
+        _content_process = get_content_process()
+        if content_type in _content_process:
+            out_kwargs = _content_process[content_type](request_body)
+            context['paster.kwargs'] = request_body
+            if isinstance(out_kwargs, dict):
+                _kwargs.update(out_kwargs)
         _new = {}
         try:
             for arg in arg_list:
@@ -223,18 +234,20 @@ class URLMiddleware(Middleware, WSGIMiddleware):
                     _file = BytesIO(rbody)
 
                 request_body_size = int(context.get('CONTENT_LENGTH', 0))
-                request_body = context['wsgi.input'].read(request_body_size)
+                if 'paster.kwargs' not in context:
+                    request_body = context['wsgi.input'].read(request_body_size)
+                else:
+                    request_body = context['paster.kwargs']
                 text_plain_process(request_body)
 
                 def _process_request_body(url_kwargs):
                     _content_process = get_content_process()
                     # logger.debug(_content_process)
                     logger.debug(content_type)
-                    if content_type in _content_process:
-                        if request_body:
-                            out_kwargs = _content_process[content_type](request_body)
-                            if isinstance(out_kwargs, dict):
-                                url_kwargs.update(out_kwargs)
+                    if content_type in _content_process and request_body:
+                        out_kwargs = _content_process[content_type](request_body)
+                        if isinstance(out_kwargs, dict):
+                            url_kwargs.update(out_kwargs)
                         return url_kwargs
                 return _process_request_body
 
@@ -412,6 +425,7 @@ class VirtualShell(object):
                 break
         if _meth:
             kwargs = kwargs_callback()
+            kwargs = kwargs if kwargs else {}
 
             return _meth(env, **kwargs)
         else:

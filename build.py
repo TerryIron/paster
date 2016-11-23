@@ -24,7 +24,7 @@ import commands
 import os
 import os.path
 
-from utils.vshell import VShell
+from paster.dev.vshell import VShell
 
 
 class Shell(VShell):
@@ -67,9 +67,10 @@ class Shell(VShell):
 import sys
 import os.path
 
+abs_path = [os.path.abspath(i) for i in os.path]
 top_dir = os.path.join(os.path.dirname(__file__), '{0}')
 abs_dir = os.path.abspath(top_dir)
-if abs_dir not in sys.path:
+if abs_dir not in abs_path:
     sys.path.insert(0, top_dir)
 """.format(topdir)
                         f.write(temp)

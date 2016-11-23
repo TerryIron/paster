@@ -128,6 +128,7 @@ class AuthTokenV1(object):
             if time.time() - int(_token_time) > expired_time:
                 raise ExpiredToken()
         except:
+            logger.debug('token: {0}, token_info:{1}'.format(token, token_info))
             raise InValidToken()
 
 
@@ -190,20 +191,23 @@ class TokenSession(BaseSession):
 
 
 def get_token_info(token_env, check_headers=None, check_kwargs=None):
-    check_headers = check_headers if isinstance(check_headers, list) else [check_headers]
-    check_kwargs = check_kwargs if isinstance(check_kwargs, list) else [check_kwargs]
-    _token_info = ''
-    if check_headers:
-        for _h in check_headers:
-            _h = str(_h).upper()
-            if _h in token_env['in_headers']:
-                _token_info += token_env['in_headers'][_h]
-    elif check_kwargs:
-        for _h in check_headers:
-            _h = str(_h).upper()
-            if _h in token_env['in_urls']:
-                _token_info += token_env['in_urls'][_h]
-    return _token_info
+    try:
+        check_headers = check_headers if isinstance(check_headers, list) else [check_headers]
+        check_kwargs = check_kwargs if isinstance(check_kwargs, list) else [check_kwargs]
+        _token_info = ''
+        if check_headers:
+            for _h in check_headers:
+                _h = str(_h).upper()
+                if _h in token_env['in_headers']:
+                    _token_info += token_env['in_headers'][_h]
+        elif check_kwargs:
+            for _h in check_headers:
+                _h = str(_h).upper()
+                if _h in token_env['in_urls']:
+                    _token_info += token_env['in_urls'][_h]
+        return _token_info
+    except:
+        pass
 
 
 def token_key(key_list):

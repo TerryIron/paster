@@ -22,6 +22,7 @@ try:
 except:
     import pickle
 import uuid
+import base64
 import redis
 import OpenSSL
 import urlparse
@@ -89,40 +90,51 @@ class BaseSession(object):
         self._default_key = default_key
         self.expired_time = expired_time
 
-    def clear(self):
+    def clear(self, item=None):
         try:
-            d = self.session.hgetall(self.name)
-            self.session.hdel(self.name, *d.keys())
+            _name = self.name
+            if item:
+                _name += str(item)
+            _name = base64.b64encode(_name)
+            d = self.session.hgetall(_name)
+            self.session.hdel(_name, *d.keys())
         except Exception as e:
             logger.debug(SessionOperationError(e))
             pass
 
     def get(self, item=None):
-        logger.debug('get item {0} {1}'.format(self.name, self._default_key))
-        if not item:
-            item = self._default_key
         try:
-            item = pickle.dumps(item)
-            value = self.session.hget(self.name, item)
+            _name = self.name
+            if not item:
+                item = self._default_key
+            else:
+                item = str(item)
+                _name += item
+            logger.debug('get item {0} key:{1}'.format(_name, item))
+            item = base64.b64encode(item)
+            _name = base64.b64encode(_name)
+            value = self.session.hget(_name, item)
             if value:
                 value = pickle.loads(value)
             return value
         except Exception as e:
-            logger.debug(SessionOperationError(e))
+            logger.error(SessionOperationError(e))
             pass
 
     def set(self, value, item=None):
-        logger.debug('set item {0} {1}'.format(self.name, self._default_key))
-        if not item:
-            item = self._default_key
         try:
-            item = pickle.dumps(item)
-            try:
-                _value = pickle.dumps(value)
-            except:
-                _value = pickle.dumps({})
-            self.session.hset(self.name, item, _value)
-            self.session.expire(self.name, self.expired_time)
+            _value = pickle.dumps(value)
+            _name = self.name
+            if not item:
+                item = self._default_key
+            else:
+                item = str(item)
+                _name += item
+            logger.debug('set item {0} key:{1}, value:{2}'.format(_name, item, value))
+            item = base64.b64encode(item)
+            _name = base64.b64encode(_name)
+            self.session.hset(_name, item, _value)
+            self.session.expire(_name, self.expired_time)
         except Exception as e:
             logger.debug(SessionOperationError(e))
             pass
