@@ -93,6 +93,7 @@ class AuthTokenV1(object):
         # Token随机值 +  Token域值 + 被允许的API表
         token['access_token'] = ':'.join([token['access_token'], scope_domain_val, scope_input_api])
         token['refresh_token'] = ':'.join([random_values(), random_values()])
+        token['expires_in'] = expires_in
         if 'scope' in token:
             token.pop('scope')
         return token
@@ -177,10 +178,11 @@ class TokenSession(BaseSession):
 
     @staticmethod
     def decode(token_info):
-        _token_val = token_info.get('token')
-        _timestamp = token_info.get('timestamp')
-        if _token_val and _timestamp:
-            return token_info
+        if token_info:
+            _token_val = token_info.get('token')
+            _timestamp = token_info.get('timestamp')
+            if _token_val and _timestamp:
+                return token_info
 
     def set(self, token_info, item=None):
         super(TokenSession, self).set(token_info, item=item)
@@ -215,7 +217,7 @@ def token_key(key_list):
 
 
 def token_session(keys, name, connection=None, connection_option='connection', expired_time=3600,
-                  check_headers=None, check_kwargs=None, need_check=True,
+                  check_headers=None, check_kwargs=None, need_check=True, outname=None,
                   class_member_name='__token__'):
     """
     令牌会话装饰器
@@ -229,6 +231,7 @@ def token_session(keys, name, connection=None, connection_option='connection', e
     :param check_kwargs: Token客户端消息检查定义
     :param need_check: 是否检查
     :param class_member_name: 类缓存对象名
+    :param outname: 输出参数名
     :return:
     """
     key_list = keys if isinstance(keys, list) else [keys]
@@ -238,12 +241,8 @@ def token_session(keys, name, connection=None, connection_option='connection', e
         def _wrap_func(*args, **kwargs):
             # 获取Token会话入口
             _obj = get_self_object(func, *args)
-            _connection = None
-            if connection:
-                _connection = connection
-            elif connection_option:
-                config = get_virtual_config_inside(func, _obj)
-                _connection = config[connection_option]
+            config = get_virtual_config_inside(func, _obj)
+            _connection = config[connection_option] if config.get(connection_option) else connection
 
             # 获取Token信息
             _env = get_func_environ(args, TokenMiddleware.TOKEN_LOCAL_NAME)
@@ -263,7 +262,7 @@ def token_session(keys, name, connection=None, connection_option='connection', e
                     _token_args.append(_token_kwargs[k])
 
             # 初始化Session
-            _conn = make_session(_connection)
+            _conn = make_session(_connection if not callable(_connection) else _connection)
             _name = token_key(_token_args)
             if not _obj:
                 session = TokenSession(name, _conn, expired_time=expired_time)
@@ -275,6 +274,9 @@ def token_session(keys, name, connection=None, connection_option='connection', e
             if need_check:
                 _save_token = session.get(_name)
                 AuthTokenV1.diff_token(_token_info, _save_token, expired_time)
+
+            if outname:
+                kwargs[outname] = _token_info
 
             ret = runner_return(func, *args, **kwargs)
             return ret

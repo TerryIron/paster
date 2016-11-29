@@ -110,7 +110,7 @@ class BaseSession(object):
             else:
                 item = str(item)
                 _name += item
-            logger.debug('get item {0} key:{1}'.format(_name, item))
+            # logger.debug('get item {0} key:{1}'.format(_name, item))
             item = base64.b64encode(item)
             _name = base64.b64encode(_name)
             value = self.session.hget(_name, item)
@@ -130,7 +130,7 @@ class BaseSession(object):
             else:
                 item = str(item)
                 _name += item
-            logger.debug('set item {0} key:{1}, value:{2}'.format(_name, item, value))
+            # logger.debug('set item {0} key:{1}, value:{2}'.format(_name, item, value))
             item = base64.b64encode(item)
             _name = base64.b64encode(_name)
             self.session.hset(_name, item, _value)
@@ -207,8 +207,8 @@ def redis_session(connection=None, connection_option='connection', expired_time=
             # 初始化Session池
             if 'session' not in redis_target:
                 config = get_virtual_config_inside(func, _obj)
-                _connection = config[connection_option] if not connection else connection
-                conn = make_session(_connection)
+                _connection = config[connection_option] if config.get(connection_option) else connection
+                conn = make_session(_connection if not callable(_connection) else _connection())
                 CONNECTIONS[_connection_name] = conn
                 redis_target['session'] = conn
 
