@@ -267,7 +267,11 @@ def token_session(keys, name, connection=None, connection_option='connection', e
             if not _obj:
                 session = TokenSession(name, _conn, expired_time=expired_time)
             else:
-                setattr(_obj, class_member_name, TokenSession(name, _conn, expired_time=expired_time))
+                if isinstance(expired_time, str):
+                    _expired_time = getattr(_obj, str(expired_time))
+                else:
+                    _expired_time = expired_time
+                setattr(_obj, class_member_name, TokenSession(name, _conn, expired_time=_expired_time))
                 session = getattr(_obj, class_member_name)
 
             # 检查Token过期和验证通过

@@ -256,12 +256,14 @@ class URLMap(_URLMap):
                 result_response(_get_status_code(target), list(_header), )
 
                 _verify_content(target)
+                logger.debug(target.content)
                 return target.content
             else:
                 _header = (('CONTENT-TYPE', mime_type), )
                 result_response(_get_status_code(result), list(_header), )
 
                 _verify_content(result)
+                logger.debug(result.content)
                 return json.dumps(result.content)
 
         return self.not_found(environ, start_response)

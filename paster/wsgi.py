@@ -53,25 +53,47 @@ class BaseException(myException):
     pass
 
 
+def proto_load_config(name, obj, relative_to):
+    if obj.startswith('normal:'):
+        _path = obj.split('normal:')[1]
+        try:
+            _path, sect = _path.split(':')
+            _obj = as_config(os.path.join(relative_to, _path))
+            if sect.lower() == 'default':
+                _ret = _obj.defaults().get(name, '')
+            else:
+                _ret = _obj.get(sect, name) if _obj.has_option(sect, name) else ''
+            return _ret
+        except:
+            _ret = as_config(os.path.join(relative_to, _path))
+            setattr(_ret, '__path__', os.path.join(relative_to, os.path.dirname(_path)))
+            return _ret
+    else:
+        return loadapp(obj, relative_to=relative_to)
+
+
+def proto_load_version(obj, relative_to):
+    pass
+
+
+def parse_config_proto(name, obj, relative_to):
+    _config_proto_dict = {
+        'config:': proto_load_config,
+        'version:': proto_load_version
+    }
+    if len(obj.split(':')) >= 3:
+        for k, f in _config_proto_dict.items():
+            if k in obj:
+                return f(name, ''.join(obj.split(k)[1:]), relative_to)
+    return obj
+
+
 def load_config(dict_obj, relative_to=''):
     _config = {}
     for k, v in dict_obj.items():
-        if isinstance(v, str) and v.startswith('config:'):
-            _v = v.split('config:')[1]
-            if _v.startswith('normal:'):
-                _path = _v.split('normal:')[1]
-                try:
-                    _path, sect = _path.split(':')
-                    _obj = as_config(os.path.join(relative_to, _path))
-                    if sect.lower() == 'default':
-                        _config[k] = _obj.defaults().get(k, '')
-                    else:
-                        _config[k] = _obj.get(sect, k) if _obj.has_option(sect, k) else ''
-                except:
-                    _config[k] = as_config(os.path.join(relative_to, _path))
-                    setattr(_config[k], '__path__', os.path.join(relative_to, os.path.dirname(_path)))
-            else:
-                _config[k] = loadapp(v, relative_to=relative_to)
+        if isinstance(v, str):
+            _v = parse_config_proto(k, v, relative_to)
+            _config[k] = _v
         else:
             _config[k] = v
     return _config

@@ -218,8 +218,12 @@ def redis_session(connection=None, connection_option='connection', expired_time=
                 session = BaseSession(_name, redis_target['session'],
                                       default_key=_key, expired_time=expired_time)
             else:
+                if isinstance(expired_time, str):
+                    _expired_time = getattr(_obj, str(expired_time))
+                else:
+                    _expired_time = expired_time
                 setattr(_obj, class_member_name, BaseSession(_name, redis_target['session'],
-                                                             default_key=_key, expired_time=expired_time))
+                                                             default_key=_key, expired_time=_expired_time))
                 session = getattr(_obj, class_member_name)
 
             ret = None
