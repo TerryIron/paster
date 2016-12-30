@@ -95,10 +95,12 @@ def declarative_base(cls=BaseMixin):
     return local_declarative_base(cls=cls)
 
 
-def make_connection(db_url):
+def make_connection(db_url, pool_recycle=3600):
     o_items = urlparse(db_url)
     if o_items.path:
-        return create_engine(db_url)
+        return create_engine(db_url,
+                             pool_recycle=pool_recycle,
+                             encoding='utf-8')
 
 
 class BaseModelDriver(object):
