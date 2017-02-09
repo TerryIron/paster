@@ -53,16 +53,22 @@ class BaseException(myException):
     pass
 
 
-def proto_load_config(name, obj, relative_to):
+def proto_load_config(name, obj, config_proto):
+    obj = ''.join(obj.split('config:')[1:])
+    relative_to = config_proto.relative_path()
     if obj.startswith('normal:'):
         _path = obj.split('normal:')[1]
         try:
             _path, sect = _path.split(':')
             _obj = as_config(os.path.join(relative_to, _path))
             if sect.lower() == 'default':
-                _ret = _obj.defaults().get(name, '')
+                config = _obj.defaults()
             else:
-                _ret = _obj.get(sect, name) if _obj.has_option(sect, name) else ''
+                config = {}
+                for _k in _obj.options(sect):
+                    config[_k] = _obj.get(sect, _k)
+            config_proto.set_config(config)
+            _ret = config.get(name, '')
             return _ret
         except:
             _ret = as_config(os.path.join(relative_to, _path))
@@ -72,19 +78,56 @@ def proto_load_config(name, obj, relative_to):
         return loadapp(obj, relative_to=relative_to)
 
 
-def proto_load_version(obj, relative_to):
-    pass
+def proto_load_version(name, obj, config_proto):
+    config = config_proto.get_config()
+    _conf = {'__default__': None}
+    for ver in obj.split():
+        ver = ''.join(ver.split('version:')[1:])
+        if ver.startswith('apply:'):
+            _ver = ver.split('apply:')[1]
+            _val = config.get('_'.join([name, _ver]))
+            _conf[_ver] = _val
+        elif ver.startswith('default:'):
+            _ver = ver.split('default:')[1]
+            _val = config.get('_'.join([name, _ver]))
+            _conf[_ver] = _val
+            if not _conf['__default__']:
+                _conf['__default__'] = _ver
+    return _conf
 
 
-def parse_config_proto(name, obj, relative_to):
+def parse_config_proto(name, obj, config, relative_to):
     _config_proto_dict = {
         'config:': proto_load_config,
         'version:': proto_load_version
     }
-    if len(obj.split(':')) >= 3:
-        for k, f in _config_proto_dict.items():
+    if isinstance(obj, str) and len(obj.split(':')) >= 3:
+        _config_proto_dict_items = _config_proto_dict.items()
+        for k, f in _config_proto_dict_items:
             if k in obj:
-                return f(name, ''.join(obj.split(k)[1:]), relative_to)
+                _config = {'config': {}}
+                _config['config'].update(config)
+
+                def get_config():
+                    return _config['config']
+
+                def set_config(conf):
+                    _config['config'] = conf
+
+                class ConfigProto:
+                    def relative_path(self):
+                        return relative_to
+
+                    def get_config(self):
+                        return get_config()
+
+                    def set_config(self, conf):
+                        set_config(conf)
+
+                proto = ConfigProto()
+
+                _val = f(name, obj, proto)
+                return parse_config_proto(name, _val, proto.get_config(), proto.relative_path())
     return obj
 
 
@@ -92,7 +135,7 @@ def load_config(dict_obj, relative_to=''):
     _config = {}
     for k, v in dict_obj.items():
         if isinstance(v, str):
-            _v = parse_config_proto(k, v, relative_to)
+            _v = parse_config_proto(k, v, dict_obj, relative_to)
             _config[k] = _v
         else:
             _config[k] = v

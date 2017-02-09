@@ -33,9 +33,9 @@ def call_later(delay=0):
     return wrap_loop
 
 
-def sync_loop_call(delta=60):
+def call_event(delta=60):                                                                                                                                                                       
     _delta = delta * 1000
-    _args = {'args': None}
+    _args = {'args': []}
 
     def wrap_loop(func):
         @wraps(func)
