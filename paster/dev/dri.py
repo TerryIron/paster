@@ -28,7 +28,7 @@ except:
     from urllib.parse import urlparse
 import weakref
 import functools
-
+import datetime
 from sqlalchemy import Table as _Table
 from sqlalchemy import *
 from sqlalchemy.exc import *
@@ -52,7 +52,8 @@ from sqlalchemy.util.langhelpers import symbol
 __author__ = 'terry'
 
 
-__all__ = ['declarative_base', 'sql', 'and_', 'or_', 'join', 'Engine', 'SingleTonEngine', 'BaseOperation', 'Operation',
+__all__ = ['declarative_base', 'sql', 'and_', 'or_', 'func', 'join', 'distinct',
+           'Engine', 'SingleTonEngine', 'BaseOperation', 'Operation', 'BaseMixin',
            'Column', 'StrColumn', 'IntColumn', 'DateTimeColumn', 'Integer', 'String', 'DateTime', 'ForeignKey',
            'event', 'mapper', 'relationship', 'symbol']
 
@@ -70,7 +71,6 @@ def contain_version(ver, diff_ver):
 class Table(_Table):
 
     __meta_data__ = {}
-    __meta_data_done__ = False
 
     def __init__(self, *args, **kwargs):
         if args:
@@ -100,7 +100,7 @@ class Table(_Table):
         if len(_name) > 1:
             if _name[0] in cls.__meta_data__:
                 _tag = ''.join(_name[1:])
-                for k, inst in cls.__meta_data__[_name[0]].items():
+                for k, inst in sorted(cls.__meta_data__[_name[0]].items()):
                     try:
                         if contain_version(k, _tag):
                             return inst
@@ -350,8 +350,11 @@ class StrColumn(Column):
 
 
 class DateTimeColumn(Column):
-    def __init__(self, default=None, **kwargs):
-        super(DateTimeColumn, self).__init__(DateTime, default=default)
+    def __init__(self, auto_now=False, **kwargs):
+        if not auto_now:
+            super(DateTimeColumn, self).__init__(DateTime)
+        else:
+            super(DateTimeColumn, self).__init__(DateTime, default=datetime.datetime.utcnow)
 
 
 class BaseMixin(object):
@@ -361,7 +364,6 @@ class BaseMixin(object):
     def __tablename__(cls):
         return cls.__name__.lower()
 
-    id = IntColumn(primary_key=True)
 
     __table_args__ = {
         'mysql_engine': 'InnoDB',
@@ -399,20 +401,39 @@ class BaseMixin(object):
     def to_dict(self, list_name=None):
         __dict = self.__dict__
         d = {}
-        if list_name and isinstance(list_name, list):
-            for n in list_name:
-                if n in __dict and not isinstance(__dict[n], InstrumentedAttribute):
+        if '_sa_instance_state' in __dict and len(__dict) == 1:
+            __dict = [_n for _n in dir(self) if not str(_n).startswith('_')
+                      and _n not in ('to_dict',
+                                     'metadata',
+                                     'update')
+                      ]
+            if list_name and isinstance(list_name, list):
+                for n in list_name:
+                    if n in __dict:
+                        d[n] = getattr(self, n)
+            elif not list_name:
+                for n in __dict:
                     d[n] = getattr(self, n)
-        elif not list_name:
-            for n in __dict:
-                if not isinstance(__dict[n], InstrumentedAttribute):
-                    d[n] = getattr(self, n)
+
+        else:
+            if list_name and isinstance(list_name, list):
+                for n in list_name:
+                    if n in __dict and not isinstance(__dict[n], InstrumentedAttribute):
+                        d[n] = getattr(self, n)
+            elif not list_name:
+                for n in __dict:
+                    if not isinstance(__dict[n], InstrumentedAttribute):
+                        d[n] = getattr(self, n)
         if '_sa_instance_state' in d:
             d.pop('_sa_instance_state')
         return d
 
 
-def declarative_base(bind=None, metadata=None, mapper=None, cls=BaseMixin,
+class _BaseMixin(BaseMixin):
+    id = IntColumn(primary_key=True)
+
+
+def declarative_base(bind=None, metadata=None, mapper=None, cls=_BaseMixin,
                      name='Base', constructor=base._declarative_constructor,
                      class_registry=None,
                      metaclass=DeclarativeMeta):
@@ -452,7 +473,7 @@ class Engine(object):
         self.name = name
         self.engine = None
 
-    def make_connection(self, db_url, pool_recycle=7200, pool_size=50, pool_timeout=30):
+    def make_connection(self, db_url, pool_recycle=3600, pool_size=50, pool_timeout=30):
         if not self.engine:
             o_items = urlparse(db_url)
             if o_items.path:
@@ -487,6 +508,7 @@ class SingleTonEngine(Engine):
 
 class Session(_Session):
     __metadata__ = {}
+    __tags__ = []
 
     def __init__(self, bind=None, autoflush=True, expire_on_commit=True, _enable_transaction_accounting=True,
                  autocommit=False, twophase=False, weak_identity_map=True, binds=None, extension=None,
@@ -498,16 +520,16 @@ class Session(_Session):
         _binds = {}
         _binds.update(self.__binds)
 
-        self.__tags = []
+        self.__tags = self.__tags__
         for i, b in self.__binds.items():
-            _tag = i.tag
-            if _tag and _tag not in self.__tags:
-                self.__tags.append(_tag)
+            # _tag = i.tag
+            # if _tag and _tag not in self.__tags:
+            #     self.__tags.append(_tag)
             if isinstance(i, Table):
                 _binds[repr(i)] = b
             else:
                 _binds[i] = b
-        sorted(self.__tags, reverse=True)
+        self.__tags = sorted(self.__tags)
         self.__binds = _binds
 
     def __del__(self):
@@ -530,19 +552,18 @@ class Session(_Session):
         # manually bound?
         if self.__binds:
             if c_mapper:
+                _name = repr(c_mapper.mapped_table)
+                _name_list = _name.split(':')
+                if len(_name_list) > 1:
+                    _tag = c_mapper.class_.__get_version__()
+                    for t in self.__tags:
+                        if contain_version(_tag, t):
+                            _name = ':'.join([_name_list[0], t])
+                            break
+                if _name in self.__metadata__:
+                    return self.__metadata__[_name]
                 if repr(c_mapper.mapped_table) in self.__binds:
                     return self.__binds[repr(c_mapper.mapped_table)]
-                else:
-                    _name = repr(c_mapper.mapped_table)
-                    _name_list = _name.split(':')
-                    if len(_name_list) > 1:
-                        _tag = ''.join(_name_list[1:])
-                        for t in self.__tags:
-                            if contain_version(_tag, t):
-                                _name = ':'.join([_name_list[0], t])
-                                break
-                    if _name in self.__metadata__:
-                        return self.__metadata__[_name]
 
             # 非ORM不支持版本控制
             if clause is not None:
@@ -580,7 +601,9 @@ def _build_kw(**kw):
     # 防止表名引起的异常
     _tables = []
     [_tables.extend(binds[tag].table_names()) for tag, meta in metadata.items() if tag in binds]
-    for tag, meta in metadata.items():
+    for tag, meta in sorted(metadata.items()):
+        if tag not in Session.__tags__:
+            Session.__tags__.append(tag)
         _bind = binds[tag]
         for table_name in _tables:
             _name = getattr(Table, '_table_name')(table_name, tag)
@@ -675,7 +698,6 @@ class BaseOperation(object):
             self._session = MyScopedSession(
                 MySessionMaker(autocommit=False,
                                autoflush=False,
-                               twophase=True,
                                metadata=self._metadata,
                                binds=self._db_engine)
             )
@@ -730,7 +752,6 @@ class BaseOperation(object):
     @staticmethod
     def _get_session(sess):
         _session = sess() if callable(sess) else sess
-        _session.commit()
         return _session
 
     def use_session(self, version=None):

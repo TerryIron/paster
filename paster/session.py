@@ -97,7 +97,7 @@ class BaseSession(object):
                 _name += str(item)
             _name = base64.b64encode(_name)
             d = self.session.hgetall(_name)
-            self.session.hdel(_name, *d.keys())
+            self.session.hdel(_name)
         except Exception as e:
             logger.debug(SessionOperationError(e))
             pass
