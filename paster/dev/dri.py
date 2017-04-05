@@ -473,7 +473,7 @@ class Engine(object):
         self.name = name
         self.engine = None
 
-    def make_connection(self, db_url, pool_recycle=3600, pool_size=50, pool_timeout=30):
+    def make_connection(self, db_url, pool_recycle=30, pool_size=50, pool_timeout=30):
         if not self.engine:
             o_items = urlparse(db_url)
             if o_items.path:
@@ -756,8 +756,9 @@ class BaseOperation(object):
 
     def use_session(self, version=None):
         _obj = self._session
+        sess = None
         if not isinstance(self._metadata, dict):
-            return self._get_session(_obj)
+            sess = self._get_session(_obj)
         else:
             if hasattr(version, 'version'):
                 version = getattr(version, 'version') or self.version
@@ -766,7 +767,11 @@ class BaseOperation(object):
             for v, obj in sorted(self._metadata.items()):
                 if contain_version(version, v):
                     _obj = _obj(**{'metadata': self._metadata, 'binds': self._db_engine})
-                    return self._get_session(_obj)
+                    sess = self._get_session(_obj)
+                    break
+        if sess:
+            sess.commit()
+        return sess
 
     @property
     def session(self):
